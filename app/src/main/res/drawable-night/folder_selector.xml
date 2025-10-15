@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+<!-- Selected state (activated for RecyclerView) -->
+<item android:state_activated="true">
+    <shape>
+        <solid android:color="@color/black" /> <!-- Highlight color for selected -->
+        <corners android:radius="8dp" />
+    </shape>
+</item>
+
+<!-- Default state (unselected) -->
+<item>
+    <shape>
+        <solid android:color="@color/onyx_heart" /> <!-- Default background color -->
+        <corners android:radius="8dp" />
+    </shape>
+</item>
+</selector>

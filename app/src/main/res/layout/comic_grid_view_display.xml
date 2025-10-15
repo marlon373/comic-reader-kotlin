@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_margin="8dp"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="4dp">
+
+    <RelativeLayout
+        android:id="@+id/comic_background_color"
+        android:layout_width="160dp"
+        android:layout_height="260dp"
+        style="@style/CustomBackgroundColorComicDisplay"
+        android:padding="8dp"
+        tools:ignore="TextSizeCheck">
+
+
+        <ImageButton
+            android:id="@+id/ibtn_comic_read"
+            android:layout_width="100dp"
+            android:layout_height="150dp"
+            android:layout_centerHorizontal="true"
+            android:layout_marginTop="20dp"
+            android:contentDescription="@string/comic_read"
+            android:scaleType="fitCenter"
+            android:background="@null"
+            tools:ignore="ImageContrastCheck"
+            tools:srcCompat="@tools:sample/avatars" />
+
+        <TextView
+            android:id="@+id/tv_comic_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/ibtn_comic_read"
+            android:layout_centerHorizontal="true"
+            android:layout_marginTop="7dp"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:gravity="start"
+            android:text="@string/comic_title"
+            style="@style/CustomTextViewStyleComicDisplay"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:layout_marginBottom="2dp"
+            android:orientation="vertical"
+            android:gravity="start">
+
+            <TextView
+                android:id="@+id/tv_comic_date"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/comic_date"
+                style="@style/CustomTextViewStyleComicDisplay"
+                android:textSize="12sp"
+                android:layout_marginBottom="2dp"/>  <!-- Added margin for spacing -->
+
+            <TextView
+                android:id="@+id/tv_comic_size"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/comic_size"
+                style="@style/CustomTextViewStyleComicDisplay"
+                android:textSize="12sp"/>
+        </LinearLayout>
+
+
+
+        <TextView
+            android:id="@+id/tv_comic_format"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_alignParentBottom="true"
+            android:layout_marginEnd="1dp"
+            android:layout_marginBottom="1dp"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="3dp"
+            android:gravity="center"
+            android:textSize="12sp"
+            style="@style/CustomTextViewStyleComicFormat"
+            android:text="@string/comic_format" />
+
+        <ImageButton
+            android:id="@+id/ibtn_comic_menu"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentTop="true"
+            android:layout_alignParentEnd="true"
+            android:background="@null"
+            android:contentDescription="@string/menu_options"
+            style="@style/CustomImageButtonComicMenu"
+            app:srcCompat="@drawable/ic_menu_item_vert"
+            tools:ignore="TouchTargetSizeCheck" />
+
+    </RelativeLayout>
+
+</androidx.cardview.widget.CardView>

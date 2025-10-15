@@ -1,0 +1,22 @@
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <SwitchPreferenceCompat
+        android:key="night_mode"
+        android:title="Night mode"
+        android:defaultValue="false"
+        android:icon="@drawable/ic_menu_item_night"
+        android:theme="@style/PreferenceTheme"/>
+
+    <SwitchPreferenceCompat
+        android:key="open_last_file"
+        android:title="Resume on last page"
+        android:icon="@drawable/ic_setting_resume"
+        android:defaultValue="false"/>
+
+    <SwitchPreferenceCompat
+        android:key="scroll_with_volume"
+        android:title="Scroll with volume buttons"
+        android:icon="@drawable/ic_settings_scroll_button"
+        android:defaultValue="false"/>
+
+</PreferenceScreen>

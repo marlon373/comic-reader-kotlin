@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- app_bar_main -->
+    <style name="ToolbarIconTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <!-- Set color for toolbar icons -->
+        <item name="colorControlNormal">@color/white</item>
+        <item name="android:textColorPrimary">?attr/colorOnPrimary</item>
+        <item name="android:itemTextAppearance">@style/CustomMenuTextStyle</item>
+        <item name="iconTint">@color/white</item>
+        <!-- Set background color -->
+        <item name="android:background">@color/onyx_heart</item>
+    </style>
+    <!-- text and size for menu item -->
+    <style name="CustomMenuTextStyle" parent="TextAppearance.AppCompat.Widget.ActionBar.Menu">
+        <item name="android:textColor">@color/white</item> <!-- Change text color -->
+        <item name="android:textSize">12sp</item> <!-- Optional: Customize text size -->
+    </style>
+
+    <!-- nav_header_main -->
+
+    <!-- style for ImageView -->
+    <style name="CustomImageViewStyleLogo">
+        <item name="android:tint">@color/white</item> <!-- Change icon color -->
+    </style>
+    <!-- style for TextView -->
+    <style name="CustomTextViewStyleLogo">
+        <item name="android:textColor">@color/white</item> <!-- Change text color  -->
+    </style>
+
+    <!-- activity_main -->
+    <style name="NavigationViewStyle" parent="Widget.MaterialComponents.NavigationView">
+        <!-- Set the icon tint and text color -->
+        <item name="itemIconTint">@color/white</item>
+        <item name="itemTextColor">@color/white</item>
+        <!-- Optional: Set background color -->
+        <item name="android:background">@color/onyx_heart</item>
+        <!-- Apply the custom item background -->
+        <item name="itemBackground">@drawable/select_drawer_menu</item>
+    </style>
+
+    <!-- Custom Preference Screen -->
+    <style name="PreferenceTheme" parent="PreferenceThemeOverlay.v14.Material">
+        <!-- Text Appearance -->
+        <item name="android:textColor">@color/white</item>
+        <item name="android:tint">@color/white</item>
+    </style>
+
+    <!-- Library fragment -->
+    <style name="CustomTextViewStyleLibrary">
+        <item name="android:textColor">@color/white</item> <!-- Customize color on library -->
+    </style>
+
+    <!-- Comic_display -->
+    <style name="CustomBackgroundColorComicDisplay">
+        <item name="android:background">@color/black</item>
+    </style>
+    <style name="CustomTextViewStyleComicDisplay">
+        <item name="android:textColor">@color/white</item>
+    </style>
+    <style name="CustomTextViewStyleComicFormat">
+        <item name="android:textColor">@color/black</item>
+        <item name="android:background">@drawable/rounded_background</item>
+    </style>
+    <style name="CustomImageButtonComicMenu">
+        <item name="android:tint">@color/white</item>
+    </style>
+
+    <!-- Alert dialog -->
+    <style name="CustomImageViewStyleIcon">
+        <item name="android:tint">@color/white</item>
+    </style>
+    <style name="CustomTextViewStyleDialog">
+        <item name="android:textColor">@color/white</item>
+    </style>
+    <style name="CustomEditTextDialog">
+        <item name="android:textColor">@color/white</item>
+        <item name="android:textColorHint">@color/white</item>
+    </style>
+    <style name="CustomButtonCancelDialog">
+        <item name="android:textColor">@color/white</item>
+        <item name="backgroundTint">@color/black</item>
+    </style>
+    <style name="CustomButtonOkDialog">
+        <item name="android:textColor">@color/white</item>
+        <item name="backgroundTint">@color/black</item>
+    </style>
+    <style name="CustomBackgroundColorDialog">
+        <item name="android:background">@color/black</item>
+    </style>
+    <style name="CustomRadioButtonDialog">
+        <item name="android:textColor">@color/white</item>
+        <item name="android:buttonTint">@color/white</item>
+    </style>
+
+    <!-- Folder library -->
+    <style name="CustomFolderLibraryBackgroundColor">
+        <item name="android:background">@drawable/folder_selector</item>
+    </style>
+    <style name="CustomFolderColorIcon">
+        <item name="android:tint">@color/white</item>
+    </style>
+    <style name="CustomFolderTextViewStyle">
+        <item name="android:textColor">@color/white</item>
+    </style>
+
+    <!-- Pop-menu Comic file -->
+    <style name="CustomPopMenuBackground">
+        <item name="android:background">@drawable/popup_background</item>
+        <item name="android:tint">@color/white</item>
+    </style>
+    <style name="CustomPopMenuTextColor">
+        <item name="android:textColor">@color/white</item>
+        <item name="android:drawableTint">@color/white</item>
+    </style>
+
+    <!-- Comic View Background -->
+    <style name="CustomComicViewBackground">
+        <item name="android:background">@color/onyx_heart</item>
+    </style>
+
+    <!-- Comic Drag Handle -->
+    <style name="CustomComicDragHandle">
+        <item name="android:background">@drawable/drag_handle</item>
+    </style>
+
+    <!-- Control Panel (Menu) -->
+    <style name="CustomControlMenuPanel">
+        <item name="android:background">@drawable/control_panel_background</item>
+    </style>
+    <style name="CustomControlMenuPanelSeekbarColorIconColor">
+        <item name="android:tint">@color/white</item>
+    </style>
+
+    <style name="Widget.CustomSlider" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="trackColorActive">@color/white</item>
+        <item name="trackColorInactive">@color/onyx_heart</item>
+        <item name="thumbColor">@color/white</item>
+        <item name="trackHeight">4dp</item>
+        <item name="thumbRadius">8dp</item>
+    </style>
+    
+    <style name="CustomControlMenuPanelTextViewStyleColor">
+        <item name="android:textColor">@color/white</item>
+    </style>
+
+
+    <!-- Bottom scanning banner -->
+    <style name="CustomBottomScanningBanner">
+        <item name="android:background">@color/black</item>
+        <item name="android:textColor">@color/white</item>
+    </style>
+
+</resources>

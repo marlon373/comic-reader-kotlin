@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black"
+    tools:context=".view.ComicViewer">
+
+    <!-- Fullscreen Comic Pages -->
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/viewPager_comic"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        style="@style/CustomComicViewBackground"/>
+
+    <FrameLayout
+        android:id="@+id/progress_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
+
+        <ProgressBar
+            android:id="@+id/progress_bar"
+            style="?android:attr/progressBarStyleLarge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center" />
+    </FrameLayout>
+
+    <!-- BottomSheet (draggable control panel) -->
+    <LinearLayout
+        android:id="@+id/bottom_sheet"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior">
+
+        <!-- Optional drag handle -->
+        <View
+            android:layout_width="36dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center"
+            android:layout_marginTop="30dp"
+            android:layout_marginBottom="30dp"
+            style="@style/CustomComicDragHandle" />
+
+        <!-- Custom Control Panel -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/bottom_menu"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="20dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="10dp"
+            android:layout_margin="15dp"
+            android:clickable="true"
+            android:focusable="true"
+            style="@style/CustomControlMenuPanel">
+
+            <!-- Top Row Group -->
+            <LinearLayout
+                android:id="@+id/linear_top_controls"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                android:layout_marginTop="16dp">
+
+                <ImageButton
+                    android:id="@+id/imgbtn_first_page"
+                    style="@style/CustomControlMenuPanelSeekbarColorIconColor"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:layout_marginEnd="15dp"
+                    android:background="@null"
+                    android:importantForAccessibility="no"
+                    app:srcCompat="@drawable/ic_bottom_menu_first_page"
+                    tools:ignore="TouchTargetSizeCheck,SpeakableTextPresentCheck" />
+
+                <ImageButton
+                    android:id="@+id/imgbtn_back_page"
+                    style="@style/CustomControlMenuPanelSeekbarColorIconColor"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:layout_marginEnd="15dp"
+                    android:background="@null"
+                    android:importantForAccessibility="no"
+                    app:srcCompat="@drawable/ic_bottom_menu_back"
+                    tools:ignore="TouchTargetSizeCheck,SpeakableTextPresentCheck" />
+
+                <TextView
+                    android:id="@+id/tv_num_page"
+                    style="@style/CustomControlMenuPanelTextViewStyleColor"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:layout_marginStart="15dp"
+                    android:layout_marginEnd="15dp"
+                    android:text="@string/pages"
+                    android:textSize="16sp" />
+
+                <ImageButton
+                    android:id="@+id/imgbtn_next_page"
+                    style="@style/CustomControlMenuPanelSeekbarColorIconColor"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:layout_marginEnd="15dp"
+                    android:background="@null"
+                    android:importantForAccessibility="no"
+                    app:srcCompat="@drawable/ic_bottom_menu_next"
+                    tools:ignore="TouchTargetSizeCheck,SpeakableTextPresentCheck" />
+
+                <ImageButton
+                    android:id="@+id/imgbtn_last_page"
+                    style="@style/CustomControlMenuPanelSeekbarColorIconColor"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="15dp"
+                    android:layout_marginEnd="10dp"
+                    android:background="@null"
+                    android:importantForAccessibility="no"
+                    app:srcCompat="@drawable/ic_bottom_menu_last_page"
+                    tools:ignore="TouchTargetSizeCheck,SpeakableTextPresentCheck" />
+            </LinearLayout>
+
+            <!-- SeekBar in center -->
+            <com.google.android.material.slider.Slider
+                android:id="@+id/slider_page_scroll"
+                style="@style/Widget.CustomSlider"
+                app:labelBehavior="gone"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="15dp"
+                app:layout_constraintTop_toBottomOf="@id/linear_top_controls"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                android:translationZ="1dp"
+                android:layout_margin="5dp"/>
+
+            <!-- Bottom Row Group -->
+            <LinearLayout
+                android:id="@+id/linear_bottom_controls"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="15dp"
+                app:layout_constraintTop_toBottomOf="@id/slider_page_scroll"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent">
+
+                <ImageButton
+                    android:id="@+id/imgbtn_scroll_type"
+                    style="@style/CustomControlMenuPanelSeekbarColorIconColor"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="20dp"
+                    android:layout_marginEnd="30dp"
+                    android:background="@null"
+                    android:importantForAccessibility="no"
+                    app:srcCompat="@drawable/ic_bottom_menu_horizontal"
+                    tools:ignore="TouchTargetSizeCheck,SpeakableTextPresentCheck" />
+
+                <ImageButton
+                    android:id="@+id/imgbtn_select_page"
+                    style="@style/CustomControlMenuPanelSeekbarColorIconColor"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="20dp"
+                    android:layout_marginEnd="20dp"
+                    android:background="@null"
+                    app:srcCompat="@drawable/ic_bottom_menu_find_in_page"
+                    tools:ignore="ContentDescription,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+
+                <ImageButton
+                    android:id="@+id/imgbtn_dark_mode"
+                    style="@style/CustomControlMenuPanelSeekbarColorIconColor"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="20dp"
+                    android:layout_marginEnd="20dp"
+                    android:background="@null"
+                    android:importantForAccessibility="no"
+                    app:srcCompat="@drawable/ic_bottom_menu_night"
+                    tools:ignore="TouchTargetSizeCheck,SpeakableTextPresentCheck" />
+
+                <ImageButton
+                    android:id="@+id/imgbtn_info"
+                    style="@style/CustomControlMenuPanelSeekbarColorIconColor"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="20dp"
+                    android:layout_marginEnd="30dp"
+                    android:background="@null"
+                    android:importantForAccessibility="no"
+                    app:srcCompat="@drawable/ic_bottom_menu_info"
+                    tools:ignore="TouchTargetSizeCheck,SpeakableTextPresentCheck" />
+            </LinearLayout>
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </LinearLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/coordinator_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".ui.comic.ComicFragment">
+
+    <!-- Top title -->
+    <TextView
+        android:id="@+id/tv_comic"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/my_comic"
+        android:layout_gravity="start|top"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        style="@style/CustomFolderTextViewStyle" />
+
+    <!-- SwipeRefreshLayout wrapping the RecyclerView -->
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipe_refresh"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="48dp"> <!-- To push below title -->
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rv_comic_display"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="8dp" />
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+    <!-- ProgressBar -->
+    <ProgressBar
+        android:id="@+id/progress_bar"
+        style="?android:attr/progressBarStyleLarge"
+        android:layout_gravity="center"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone" />
+
+    <!-- "No comics found" message -->
+    <TextView
+        android:id="@+id/tv_show_no_comics_found"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        android:textAlignment="center"
+        android:textSize="16sp"
+        android:visibility="gone"
+        style="@style/CustomFolderTextViewStyle" />
+
+
+    <TextView
+        android:id="@+id/tv_show_no_comics_folder_found"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        android:textAlignment="center"
+        android:textSize="16sp"
+        android:visibility="gone"
+        style="@style/CustomFolderTextViewStyle" />
+
+
+
+    <!-- "Add on library" message -->
+    <TextView
+        android:id="@+id/tv_add_on_library"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="8dp"
+        android:textAlignment="center"
+        android:textSize="16sp"
+        android:visibility="gone"
+        style="@style/CustomFolderTextViewStyle" />
+
+
+    <!-- Bottom scanning banner -->
+    <TextView
+        android:id="@+id/tv_scanning_banner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:padding="12dp"
+        android:text="@string/scanning_files"
+        android:textSize="14sp"
+        android:gravity="start|center_vertical"
+        android:visibility="gone"
+        style="@style/CustomBottomScanningBanner"/>
+
+
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

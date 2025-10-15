@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/popupLayout"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    style="@style/CustomPopMenuBackground"
+    android:padding="10dp">
+
+    <TextView
+        android:id="@+id/action_clear_all"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/action_clear_all"
+        android:layout_gravity="center"
+        android:padding="10dp"
+        android:drawablePadding="10dp"
+        app:drawableStartCompat="@drawable/ic_menu_item_clear_all"
+        style="@style/CustomPopMenuTextColor"/>
+
+
+    <TextView
+        android:id="@+id/action_sort"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/action_sort"
+        android:layout_gravity="center"
+        android:padding="10dp"
+        android:drawablePadding="10dp"
+        app:drawableStartCompat="@drawable/ic_menu_item_sort"
+        style="@style/CustomPopMenuTextColor"/>
+
+    <TextView
+        android:id="@+id/action_display"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/action_grid"
+        android:layout_gravity="center"
+        android:padding="10dp"
+        android:drawablePadding="10dp"
+        app:drawableStartCompat="@drawable/ic_menu_item_grid"
+        style="@style/CustomPopMenuTextColor"/>
+
+    <TextView
+        android:id="@+id/action_day_night"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/action_night"
+        android:layout_gravity="center"
+        android:padding="10dp"
+        android:drawablePadding="10dp"
+        app:drawableStartCompat="@drawable/ic_menu_item_night"
+        style="@style/CustomPopMenuTextColor"/>
+</LinearLayout>
