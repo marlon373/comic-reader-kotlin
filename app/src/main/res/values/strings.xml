@@ -28,7 +28,7 @@
     <string name="description_remove_file">Do you really want to remove  this file from your device?</string>
     <string name="enter_new_file_name">Enter new file name</string>
     <string name="cancel">Cancel</string>
-    <string name="ok">Ok</string>
+    <string name="ok">OK</string>
     <string name ="recent">Recently Read</string>
     <string name="name_folder_library">Name folder</string>
     <string name="remove_library">Remove folder</string>

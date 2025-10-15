@@ -6,7 +6,6 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.util.LruCache
 import androidx.core.graphics.createBitmap
-import com.codecademy.comicreader.view.sources.ComicPageSource
 
 abstract class BitmapPageSource : ComicPageSource {
     protected val bitmapCache: LruCache<Int, Bitmap> =
