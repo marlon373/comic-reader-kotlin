@@ -7,23 +7,22 @@ This version is a **modern rewrite** of the [Java version](https://github.com/ma
 
 ## 🚀 Features
 - 📖 Read comics in **CBR**, **CBZ**, and **PDF** formats  
-- 🗂️ Browse and manage library folders  
-- ⏱️ Continue from last read page  
+- 🗂️ Browse comics from folders    
+- ⏱️ Continue reading from last page    
 - 🖼️ Thumbnail page previews  
 - 🌓 Dark mode support  
 - 🔄 Sort and filter comics  
-- 🗑️ Clear all recent files  
+- 🗑️ Clear recent history 
 
 ---
 
-## ⚙️ Tech Stack
+## 🧠 Built With
 | Component | Technology |
 |------------|-------------|
 | Language | **Kotlin (1.9x)** |
 | Architecture | **MVVM + Coroutines** |
 | UI | XML layouts |
 | Database | Room |
-
 | Min SDK | 26 |
 | Target SDK | 35 |
 
