@@ -1,28 +1,19 @@
 package com.codecademy.comicreader.ui.comic
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class ComicViewModel : ViewModel() {
-    val noComicsMessage: MutableLiveData<String> = MutableLiveData()
-    val addOnLibraryMessage: MutableLiveData<String> = MutableLiveData()
-    val noComicsFolderMessage: MutableLiveData<String> = MutableLiveData()
 
-    init {
-        noComicsMessage.value = "No comics found"
-        noComicsFolderMessage.value = "No comic folder found"
-        addOnLibraryMessage.value = "Add on Library"
-    }
+    private val _noComicsMessage = MutableStateFlow("No comics found")
+    val noComicsMessage: StateFlow<String> = _noComicsMessage.asStateFlow()
 
-    fun getNoComicsMessage(): LiveData<String?> {
-        return noComicsMessage
-    }
+    private val _addOnLibraryMessage = MutableStateFlow("Add on Library")
+    val addOnLibraryMessage: StateFlow<String> = _addOnLibraryMessage.asStateFlow()
 
-    fun getAddOnLibraryMessage(): LiveData<String> {
-        return addOnLibraryMessage
-    }
-
-    val noComicFolderMessage: LiveData<String>
-        get() = noComicsFolderMessage
+    private val _noComicsFolderMessage = MutableStateFlow("No comic folder found")
+    val noComicsFolderMessage: StateFlow<String> = _noComicsFolderMessage.asStateFlow()
 }
+

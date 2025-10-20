@@ -1,33 +1,31 @@
 package com.codecademy.comicreader.ui.recent
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import com.codecademy.comicreader.model.Comic
-import java.util.Objects
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
+
 
 class RecentViewModel : ViewModel() {
-    private val recentComics = MutableLiveData<MutableList<Comic>>(ArrayList())
 
-    fun getRecentComics(): LiveData<MutableList<Comic>> {
-        return recentComics
-    }
+    // Use StateFlow instead of LiveData
+    private val _recentComics = MutableStateFlow<List<Comic>>(emptyList())
+    val recentComics: StateFlow<List<Comic>> = _recentComics
 
+    /** Add a comic to the recent list (no duplicates, keep newest first, limit to 20). */
     fun addComicToRecent(comic: Comic) {
-        var currentList: MutableList<Comic> =
-            ArrayList(Objects.requireNonNull<MutableList<Comic>>(recentComics.getValue()))
-        currentList.removeIf { c: Comic -> c.path == comic.path }  // Avoid duplicates
-        currentList.add(0, comic) // Add to top
-
-        // Limit recent list to 20
-        if (currentList.size > 20) {
-            currentList = currentList.subList(0, 20)
+        _recentComics.update { currentList ->
+            val newList = currentList.toMutableList().apply {
+                removeAll { it.path == comic.path } // Avoid duplicates
+                add(0, comic) // Add to top
+            }
+            if (newList.size > 20) newList.subList(0, 20) else newList
         }
-
-        recentComics.value = currentList
     }
 
-    fun setRecentComics(comics: MutableList<Comic>) {
-        recentComics.value = comics
+    /** Replace the entire recent list */
+    fun setRecentComics(comics: List<Comic>) {
+        _recentComics.value = comics.take(20) // Limit to 20 just in case
     }
 }

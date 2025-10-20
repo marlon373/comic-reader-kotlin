@@ -1,56 +1,40 @@
 package com.codecademy.comicreader.ui.library
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import com.codecademy.comicreader.model.Folder
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class LibraryViewModel : ViewModel() {
 
-    val addFolderLibrary: MutableLiveData<String> = MutableLiveData()
-    val folderAdded: MutableLiveData<Boolean> = MutableLiveData(false)
-    private val foldersLiveData: MutableLiveData<List<Folder>> = MutableLiveData()
-    private val folderRemoved: MutableLiveData<Boolean> = MutableLiveData(false)
+    private val _folders = MutableStateFlow<List<Folder>>(emptyList())
+    val folders: StateFlow<List<Folder>> = _folders.asStateFlow()
 
-    init {
-        addFolderLibrary.value = "Use the “ +” button to add the folder\n" +
-                "   containing the .cbz or cbr files"
-        foldersLiveData.value = emptyList()
-    }
+    private val _addFolderMessage = MutableStateFlow(
+        "Use the “+” button to add the folder\ncontaining the .cbz or .cbr files"
+    )
+    val addFolderMessage: StateFlow<String> = _addFolderMessage.asStateFlow()
 
-    fun getAddFolderLibrary(): LiveData<String> {
-        return addFolderLibrary
-    }
+    // Folder add/remove one-time events
+    private val _folderAdded = MutableSharedFlow<Unit>()
+    val folderAdded: SharedFlow<Unit> = _folderAdded.asSharedFlow()
 
-    fun getFolders(): LiveData<List<Folder>> {
-        return foldersLiveData
-    }
+    private val _folderRemoved = MutableSharedFlow<Unit>()
+    val folderRemoved: SharedFlow<Unit> = _folderRemoved.asSharedFlow()
 
     fun setFolders(folders: List<Folder>) {
-        foldersLiveData.postValue(ArrayList(folders)) // Ensure LiveData updates UI
+        _folders.value = folders.toList()
     }
 
-    fun getFolderAdded(): LiveData<Boolean> {
-        return folderAdded
+    suspend fun notifyFolderAdded() {
+        _folderAdded.emit(Unit)
     }
 
-    fun notifyFolderAdded() {
-        folderAdded.value = true // Notifies ComicFragment
-    }
-
-    fun resetFolderAddedFlag() {
-        folderAdded.value = false // Prevents repeated triggers
-    }
-
-    fun notifyFolderRemoved() {
-        folderRemoved.value = true
-    }
-
-    fun notifyFolderRemovedHandled() {
-        folderRemoved.value = false
-    }
-
-    fun getFolderRemoved(): LiveData<Boolean> {
-        return folderRemoved
+    suspend fun notifyFolderRemoved() {
+        _folderRemoved.emit(Unit)
     }
 }
