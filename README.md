@@ -20,7 +20,7 @@ This version is a **modern rewrite** of the [Java version](https://github.com/ma
 | Component | Technology |
 |------------|-------------|
 | Language | **Kotlin (1.9x)** |
-| Architecture | **MVVM + Coroutines** |
+| Architecture | **MVVM + Coroutines + Flow**  |
 | UI | XML layouts |
 | Database | Room |
 | Min SDK | 26 |
