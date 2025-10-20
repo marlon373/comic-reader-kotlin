@@ -35,6 +35,12 @@ This version is a **modern rewrite** of the [Java version](https://github.com/ma
 
 
 ---
+## Known Issues
+- When toggling Dark Mode through Settings and returning to the Comic screen, thumbnails may temporarily appear blank.  
+  **Cause:** The RecyclerView adapter cache is cleared before image reload after a configuration change.  
+  **Planned fix:** Re-initialize the thumbnail cache in `onResume()` or persist it via ViewModel scope.
+
+---
 
 ## 🛠️ Installation
 
