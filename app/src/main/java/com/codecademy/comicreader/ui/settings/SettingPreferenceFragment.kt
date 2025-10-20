@@ -2,11 +2,11 @@ package com.codecademy.comicreader.ui.settings
 
 import android.content.Context
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreferenceCompat
 import com.codecademy.comicreader.R
 import androidx.core.content.edit
+import com.codecademy.comicreader.theme.ThemeManager
 
 class SettingPreferenceFragment : PreferenceFragmentCompat() {
 
@@ -33,18 +33,12 @@ class SettingPreferenceFragment : PreferenceFragmentCompat() {
 
             pref.setOnPreferenceChangeListener { _, newValue ->
                 val enableNight = newValue as Boolean
+                val prefs = requireContext().getSharedPreferences("comicPrefs", Context.MODE_PRIVATE)
+                prefs.edit { putBoolean("isNightMode", enableNight) }
 
-                // Save preference
-                prefs.edit { putBoolean(KEY_THEME, enableNight) }
-
-                // Apply theme
-                AppCompatDelegate.setDefaultNightMode(
-                    if (enableNight) AppCompatDelegate.MODE_NIGHT_YES
-                    else AppCompatDelegate.MODE_NIGHT_NO
-                )
-
-                requireActivity().recreate() // Refresh the UI
-                true // Allow value to be saved
+                ThemeManager.applyTheme(requireContext())
+                requireActivity().recreate()
+                true
             }
         }
     }
