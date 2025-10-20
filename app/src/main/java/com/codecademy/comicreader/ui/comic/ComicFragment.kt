@@ -13,8 +13,10 @@ import androidx.core.net.toUri
 import androidx.core.view.isVisible
 import androidx.documentfile.provider.DocumentFile
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -29,7 +31,7 @@ import com.codecademy.comicreader.ui.recent.RecentViewModel
 import com.codecademy.comicreader.utils.SystemUtil
 import com.codecademy.comicreader.view.ComicViewer
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.DecimalFormat
@@ -89,96 +91,107 @@ class ComicFragment : Fragment() {
 
     // Observes folder changes using coroutines
     private fun observeFolderChanges() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
 
-        // Folder added → Full rescan
-        libraryViewModel.getFolderAdded().observe(viewLifecycleOwner) { added ->
-            if (added == true) {
-                Log.d("ComicFragment", "Folder was added — scanning...")
-                scanAndUpdateComics(fullRescan = true)
-                libraryViewModel.resetFolderAddedFlag()
-            }
-        }
-
-        // Folder list changed → just refresh UI
-        libraryViewModel.getFolders().observe(viewLifecycleOwner) { folders ->
-            if (!folders.isNullOrEmpty()) {
-                Log.d("ComicFragment", "Folders available — refreshing comic view.")
-                updateComicsView()
-
-                //  Check if DB is empty → trigger initial scan
-                viewLifecycleOwner.lifecycleScope.launch(ioDispatcher) {
-                    val db = ComicDatabase.getInstance(requireContext())
-                    val comicsEmpty = db.comicDao().getAllComics().isEmpty()
-                    if (comicsEmpty) {
-                        withContext(Dispatchers.Main){
-                            Log.d("ComicFragment", "No comics in DB → initial full scan.")
-                            scanAndUpdateComics(fullRescan = true)
-                        }
-                    }
-                }
-            }
-        }
-
-        // Folder removed → Full rescan
-        libraryViewModel.getFolderRemoved().observe(viewLifecycleOwner) { removed ->
-            if (removed == true) {
-                comicFiles.clear()
-                comicAdapter.updateComicList(mutableListOf())
-
-                val folders = libraryViewModel.getFolders().value
-                if (folders.isNullOrEmpty()) {
-                    binding?.progressBar?.visibility = View.GONE
-                    binding?.tvScanningBanner?.visibility = View.GONE
-                } else {
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        delay(350)
+                // Folder added
+                launch {
+                    libraryViewModel.folderAdded.collect {
+                        Log.d("ComicFragment", "Folder added → scanning")
                         scanAndUpdateComics(fullRescan = true)
                     }
                 }
-                libraryViewModel.notifyFolderRemovedHandled()
+
+                // Folder removed
+                launch {
+                    libraryViewModel.folderRemoved.collect {
+                        Log.d("ComicFragment", "Folder removed → rescanning")
+                        comicFiles.clear()
+                        comicAdapter.updateComicList(mutableListOf())
+                        scanAndUpdateComics(fullRescan = true)
+                    }
+                }
+
+                // Folder list changes
+                launch {
+                    libraryViewModel.folders.collect { folders ->
+                        Log.d("ComicFragment", "Folders changed → updating view")
+                        updateComicsView()
+
+                        // Optional: Check if DB empty like old version
+                        if (folders.isNotEmpty()) {
+                            viewLifecycleOwner.lifecycleScope.launch(ioDispatcher) {
+                                val db = ComicDatabase.getInstance(requireContext())
+                                val comicsEmpty = db.comicDao().getAllComics().first().isEmpty() // use .first() since Flow
+                                if (comicsEmpty) {
+                                    withContext(Dispatchers.Main) {
+                                        Log.d("ComicFragment", "No comics in DB → initial full scan.")
+                                        scanAndUpdateComics(fullRescan = true)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
             }
         }
-
     }
 
     // Swipe refresh → Full rescan
     private fun setupSwipeRefresh() {
-
         binding?.swipeRefresh?.setOnRefreshListener {
-            Log.d("ComicFragment", "Swipe-to-refresh triggered.")
-            updateComicsView()
+            Log.d("ComicFragment", "Swipe refresh triggered")
 
-            val folders = libraryViewModel.getFolders().value
-            if (folders.isNullOrEmpty()) {
-                Log.d("ComicFragment", "No folders → skip scan.")
+            val folders = libraryViewModel.folders.value
+            if (folders.isEmpty()) {
                 binding?.swipeRefresh?.isRefreshing = false
                 binding?.progressBar?.visibility = View.GONE
                 binding?.tvScanningBanner?.visibility = View.GONE
                 return@setOnRefreshListener
             }
 
-            // Only scan if folders exist
+            comicAdapter.updateComicList(mutableListOf()) // optional: clear UI early
+
+            binding?.progressBar?.visibility = View.VISIBLE
+            binding?.tvScanningBanner?.visibility = View.VISIBLE
+
             scanAndUpdateComics(fullRescan = true)
 
             val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             prefs.edit { putLong("last_scan_timestamp", System.currentTimeMillis()) }
         }
-
     }
 
     // UI messages
     private fun observeUITexts() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
 
-        comicViewModel.noComicsMessage.observe(viewLifecycleOwner) {
-            binding?.tvShowNoComicsFound?.text = it
-        }
-        comicViewModel.addOnLibraryMessage.observe(viewLifecycleOwner) {
-            binding?.tvAddOnLibrary?.text = it
-        }
-        comicViewModel.noComicFolderMessage.observe(viewLifecycleOwner) {
-            binding?.tvShowNoComicsFolderFound?.text = it
+                // Collect noComicsMessage
+                launch {
+                    comicViewModel.noComicsMessage.collect { text ->
+                        binding?.tvShowNoComicsFound?.text = text
+                    }
+                }
+
+                // Collect addOnLibraryMessage
+                launch {
+                    comicViewModel.addOnLibraryMessage.collect { text ->
+                        binding?.tvAddOnLibrary?.text = text
+                    }
+                }
+
+                // Collect noComicsFolderMessage
+                launch {
+                    comicViewModel.noComicsFolderMessage.collect { text ->
+                        binding?.tvShowNoComicsFolderFound?.text = text
+                    }
+                }
+            }
         }
     }
+
 
     // Display add folder first lunch
     private fun isFirstAppLaunch(): Boolean {
@@ -274,7 +287,7 @@ class ComicFragment : Fragment() {
         }
         viewLifecycleOwner.lifecycleScope.launch(ioDispatcher) {
             val db = ComicDatabase.getInstance(context)
-            val cachedComics = db.comicDao().getAllComics()
+            val cachedComics = db.comicDao().getAllComics().first()
             val validComics = mutableListOf<Comic>()
 
             val prefs = context.getSharedPreferences("removed_comics", Context.MODE_PRIVATE)
@@ -299,7 +312,6 @@ class ComicFragment : Fragment() {
 
     // Scanning or Rescanning
     private fun scanAndUpdateComics(fullRescan: Boolean = false) {
-
         binding?.apply {
             progressBar.visibility = View.VISIBLE
             tvScanningBanner.visibility = View.VISIBLE
@@ -307,8 +319,10 @@ class ComicFragment : Fragment() {
 
         viewLifecycleOwner.lifecycleScope.launch(ioDispatcher) {
             val db = ComicDatabase.getInstance(requireContext())
-            val folders = libraryViewModel.getFolders().value
-            if (folders.isNullOrEmpty()) {
+
+            // Use Flow snapshot instead of LiveData
+            val folders = libraryViewModel.folders.first()
+            if (folders.isEmpty()) {
                 db.comicDao().deleteAll()
                 withContext(Dispatchers.Main) { updateComicsList(mutableListOf()) }
                 return@launch
@@ -322,14 +336,16 @@ class ComicFragment : Fragment() {
             removedPaths.removeIf { path -> currentFolderPaths.any { path.startsWith(it) } }
             removedPrefs.edit { putStringSet("removed_paths", removedPaths) }
 
-            db.comicDao().getAllComics().forEach { comic ->
+            //  Get snapshot from Flow
+            val cachedComics = db.comicDao().getAllComics().first()
+            cachedComics.forEach { comic ->
                 if (currentFolderPaths.none { comic.path.startsWith(it) }) {
                     db.comicDao().deleteComicByPath(comic.path)
                 }
             }
 
             val newComics = mutableListOf<Comic>()
-            val existingPaths = db.comicDao().getAllComics().map { it.path }.toSet()
+            val existingPaths = cachedComics.map { it.path }.toSet()
             val scanPrefs = requireContext().getSharedPreferences("FolderScanPrefs", Context.MODE_PRIVATE)
             val scanEditor = scanPrefs.edit()
 
@@ -348,7 +364,8 @@ class ComicFragment : Fragment() {
 
             if (newComics.isNotEmpty()) db.comicDao().insertAll(newComics)
 
-            val finalList = db.comicDao().getAllComics()
+            //  Final snapshot after insert
+            val finalList = db.comicDao().getAllComics().first()
             scanEditor.apply()
 
             withContext(Dispatchers.Main) {
@@ -361,6 +378,7 @@ class ComicFragment : Fragment() {
             }
         }
     }
+
 
     // Recursive scan helper
     private suspend fun scanFolderRecursively(
@@ -504,11 +522,7 @@ class ComicFragment : Fragment() {
         }
 
         // Get folders from ViewModel
-        val folders = libraryViewModel.getFolders().value
-        if (folders == null) {
-            Log.w("ComicFragment", "Folders list is null. Skipping UI update.")
-            return
-        }
+        val folders = libraryViewModel.folders.value
 
         if (isFirstAppLaunch()) {
             addOnLibraryMessage.visibility = View.VISIBLE
@@ -628,8 +642,8 @@ class ComicFragment : Fragment() {
         val lastScanTime = prefs.getLong("last_scan_timestamp", 0)
         val now = System.currentTimeMillis()
 
-        val folders = libraryViewModel.getFolders().value
-        if (folders.isNullOrEmpty()) {
+        val folders = libraryViewModel.folders.value
+        if (folders.isEmpty()) {
             Log.d("ComicFragment", "No folders in library → skipping scan.")
             return
         }

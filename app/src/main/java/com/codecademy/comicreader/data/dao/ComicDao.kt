@@ -5,27 +5,25 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.codecademy.comicreader.model.Comic
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ComicDao {
 
-    // Get all comics in the database
+    // Reactive query — automatically emits updates when data changes
     @Query("SELECT * FROM Comics")
-    fun getAllComics(): List<Comic>
+    fun getAllComics(): Flow<List<Comic>>
 
-    // Insert or replace multiple comics (avoids duplicates)
-    @Insert(onConflict = OnConflictStrategy.Companion.REPLACE)
-    fun insertAll(comics: List<Comic>)
+    // Marked suspend for coroutine safety
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(comics: List<Comic>)
 
-    // Delete all comics
     @Query("DELETE FROM Comics")
-    fun deleteAll()
+    suspend fun deleteAll()
 
-    // Delete a single comic by its exact path
     @Query("DELETE FROM Comics WHERE path = :comicPath")
-    fun deleteComicByPath(comicPath: String)
+    suspend fun deleteComicByPath(comicPath: String)
 
-    // Delete all comics from a folder (matches prefix)
     @Query("DELETE FROM Comics WHERE path LIKE :folderPath || '%'")
-    fun deleteComicsByFolderPath(folderPath: String)
+    suspend fun deleteComicsByFolderPath(folderPath: String)
 }

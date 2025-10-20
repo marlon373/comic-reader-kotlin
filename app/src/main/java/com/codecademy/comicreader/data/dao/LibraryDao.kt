@@ -3,23 +3,24 @@ package com.codecademy.comicreader.data.dao
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.codecademy.comicreader.model.Folder
+import kotlinx.coroutines.flow.Flow
 
-@Dao // DAO (Data Access Object) interface for interacting with the database
+@Dao
 interface LibraryDao {
-    // Inserts a new folder into the database
-    @Insert
-    fun insert(folder: Folder?)
 
-    // Deletes a specific folder
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(folder: Folder)
+
     @Delete
-    fun delete(folder: Folder?)
+    suspend fun delete(folder: Folder)
 
-    @get:Query("SELECT * FROM Folder")
-    val allFolders: MutableList<Folder>
+    // Reactive query — emits updates when folders table changes
+    @Query("SELECT * FROM Folder")
+    fun getAllFolders(): Flow<List<Folder>>
 
-    // Retrieves a folder by its path (if it exists)
     @Query("SELECT * FROM Folder WHERE path = :folderPath LIMIT 1")
-    fun getFolderByPath(folderPath: String?): Folder?
+    suspend fun getFolderByPath(folderPath: String): Folder?
 }

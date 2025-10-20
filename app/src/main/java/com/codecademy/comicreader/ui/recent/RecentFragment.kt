@@ -32,8 +32,11 @@ import kotlin.text.split
 import kotlin.text.toDouble
 import androidx.core.content.edit
 import androidx.core.net.toUri
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.RecyclerView
 import com.codecademy.comicreader.utils.SystemUtil
+import kotlinx.coroutines.flow.first
 
 
 class RecentFragment : Fragment() {
@@ -51,10 +54,7 @@ class RecentFragment : Fragment() {
         const val KEY_SORT_MODE = "isAscending"
     }
 
-    override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         binding = FragmentRecentBinding.inflate(inflater, container, false)
         val view = binding!!.root
 
@@ -66,10 +66,15 @@ class RecentFragment : Fragment() {
         comicAdapter = ComicAdapter(recentComics, ::onComicClicked, isGridView, requireContext(),ioDispatcher)
         binding!!.rvRecentDisplay.adapter = comicAdapter
 
-        recentViewModel.getRecentComics().observe(viewLifecycleOwner) { comics ->
-            recentComics.clear()
-            recentComics.addAll(comics)
-            comicAdapter?.notifyDataSetChanged()
+        //  Observe the flow instead of LiveData
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                recentViewModel.recentComics.collect { comics ->
+                    recentComics.clear()
+                    recentComics.addAll(comics)
+                    comicAdapter?.notifyDataSetChanged()
+                }
+            }
         }
 
         loadSortPreferences()
@@ -143,7 +148,7 @@ class RecentFragment : Fragment() {
 
         viewLifecycleOwner.lifecycleScope.launch(ioDispatcher) {
             val db = ComicDatabase.getInstance(requireContext())
-            val allComics = db.comicDao().getAllComics()
+            val allComics = db.comicDao().getAllComics().first()
 
             val comicMap = allComics.associateBy { it.path }
             val loadedComics = savedPaths.mapNotNull { path ->
@@ -163,6 +168,8 @@ class RecentFragment : Fragment() {
             }
         }
     }
+
+
 
     private fun recentComicList(newComics: List<Comic>): MutableList<Comic> {
         val context = requireContext()

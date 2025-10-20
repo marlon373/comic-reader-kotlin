@@ -23,8 +23,10 @@ import androidx.core.net.toUri
 import androidx.core.view.MenuProvider
 import androidx.documentfile.provider.DocumentFile
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.GridLayoutManager
 import com.codecademy.comicreader.MainActivity
 import com.codecademy.comicreader.R
@@ -86,7 +88,7 @@ class LibraryFragment : Fragment() {
         libraryDatabase = LibraryDatabase.getInstance(requireContext())
         folderItemDao = libraryDatabase.folderItemDao()
 
-       setupRecyclerView()
+        setupRecyclerView()
 
         // FAB click opens the folder picker
         binding!!.fab.setOnClickListener { openFolderPicker() }
@@ -137,19 +139,26 @@ class LibraryFragment : Fragment() {
         // Now it's safe to access ViewModel scoped to activity
         libraryViewModel = ViewModelProvider(requireActivity())[LibraryViewModel::class.java]
 
-        // Observes ViewModel text changes and updates UI
-        libraryViewModel.addFolderLibrary.observe(viewLifecycleOwner) { message ->
-            binding?.tvInstruction?.text = message
-            updateEmptyMessageVisibility()
-        }
-
-        //  Observe folders or perform setup
-        libraryViewModel.getFolders().observe(viewLifecycleOwner) { folders ->
-            Log.d("LibraryFragment", "Observed folders: ${folders.size}")
-            folderItems.clear()
-            folderItems.addAll(folders)
-            libraryFolderAdapter?.notifyDataSetChanged()
-            updateEmptyMessageVisibility()
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    // Observes ViewModel text changes and updates UI
+                    libraryViewModel.addFolderMessage.collect { message ->
+                        binding?.tvInstruction?.text = message
+                        updateEmptyMessageVisibility()
+                    }
+                }
+                launch {
+                    //  Observe folders or perform setup
+                    libraryViewModel.folders.collect { folders ->
+                        Log.d("LibraryFragment", "Observed folders: ${folders.size}")
+                        folderItems.clear()
+                        folderItems.addAll(folders)
+                        libraryFolderAdapter?.notifyDataSetChanged()
+                        updateEmptyMessageVisibility()
+                    }
+                }
+            }
         }
     }
 
@@ -248,28 +257,29 @@ class LibraryFragment : Fragment() {
     // Loads saved folders from the database
     private fun loadSavedFolders() {
         viewLifecycleOwner.lifecycleScope.launch(ioDispatcher) {
-            val savedEntities = folderItemDao.allFolders
-            val newFolderItems = mutableListOf<Folder>()
+            folderItemDao.getAllFolders().collect { savedEntities ->
+                val newFolderItems = mutableListOf<Folder>()
 
-            for (entity in savedEntities) {
-                val directory = DocumentFile.fromTreeUri(requireContext(), entity.path.toUri())
-                if (directory != null && directory.isDirectory) {
-                    newFolderItems.add(Folder(entity.name, entity.path, true))
+                for (entity in savedEntities) {
+                    val directory = DocumentFile.fromTreeUri(requireContext(), entity.path.toUri())
+                    if (directory != null && directory.isDirectory) {
+                        newFolderItems.add(Folder(entity.name, entity.path, true))
+                    }
                 }
-            }
 
-            withContext(Dispatchers.Main) {
-                folderItems.clear()
-                folderItems.addAll(newFolderItems)
-                libraryFolderAdapter?.notifyDataSetChanged()
-                FolderUtils.saveFolders(requireContext(), newFolderItems)
-                libraryViewModel.setFolders(newFolderItems) // Ensure ComicFragment updates
-                updateEmptyMessageVisibility()
-                // Set launch complete only if folders were loaded
-                if (newFolderItems.isNotEmpty()) setFirstAppLaunchCompleted()
+                withContext(Dispatchers.Main) {
+                    folderItems.clear()
+                    folderItems.addAll(newFolderItems)
+                    libraryFolderAdapter?.notifyDataSetChanged()
+                    FolderUtils.saveFolders(requireContext(), newFolderItems)
+                    libraryViewModel.setFolders(newFolderItems)
+                    updateEmptyMessageVisibility()
+                    if (newFolderItems.isNotEmpty()) setFirstAppLaunchCompleted()
+                }
             }
         }
     }
+
 
     // Loads the contents of a selected folder
     private fun loadFolderContents(uri: Uri) {
