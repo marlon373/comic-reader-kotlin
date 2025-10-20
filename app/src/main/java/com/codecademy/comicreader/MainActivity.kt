@@ -11,7 +11,6 @@ import android.view.ViewGroup
 import android.widget.PopupWindow
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination
@@ -20,14 +19,15 @@ import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.NavigationUI.navigateUp
 import androidx.navigation.ui.NavigationUI.setupActionBarWithNavController
-import androidx.navigation.ui.NavigationUI.setupWithNavController
 import com.codecademy.comicreader.databinding.ActivityMainBinding
-import com.codecademy.comicreader.ui.comic.ComicAdapter
 import com.codecademy.comicreader.ui.comic.ComicFragment
 import com.codecademy.comicreader.ui.library.LibraryViewModel
 import com.codecademy.comicreader.ui.recent.RecentFragment
 import com.codecademy.comicreader.utils.FolderUtils
 import androidx.core.content.edit
+import androidx.navigation.ui.setupActionBarWithNavController
+import androidx.navigation.ui.setupWithNavController
+import com.codecademy.comicreader.theme.ThemeManager
 
 
 class MainActivity : AppCompatActivity() {
@@ -44,7 +44,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         // Forcefully apply app-defined theme
-        applyAppTheme()
+        ThemeManager.applyTheme(this)
 
         // Initialize LibraryViewModel scoped to the activity
         val libraryViewModel =
@@ -72,9 +72,12 @@ class MainActivity : AppCompatActivity() {
             .setOpenableLayout(drawer)
             .build()
 
-        val navController = findNavController(this, R.id.nav_host_fragment_content_main)
-        setupActionBarWithNavController(this, navController, mAppBarConfiguration!!)
-        setupWithNavController(navigationView, navController)
+        val navHostFragment = supportFragmentManager
+            .findFragmentById(R.id.nav_host_fragment_content_main) as NavHostFragment
+        val navController = navHostFragment.navController
+
+        setupActionBarWithNavController(navController, mAppBarConfiguration!!)
+        navigationView.setupWithNavController(navController)
 
         // Listen for destination changes and refresh menu
         navController.addOnDestinationChangedListener { controller: NavController?, destination: NavDestination?, arguments: Bundle? ->
@@ -194,29 +197,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun toggleDayNightMode() {
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        val isNightMode = prefs.getBoolean(KEY_THEME, false)
-
-        prefs.edit { putBoolean(KEY_THEME, !isNightMode) }
-        AppCompatDelegate.setDefaultNightMode(
-            if (isNightMode) AppCompatDelegate.MODE_NIGHT_NO else AppCompatDelegate.MODE_NIGHT_YES
-        )
-
-        ComicAdapter.clearMemoryCache()
-        recreate()
+        ThemeManager.toggleTheme(this)
     }
 
-    // Apply day or night
-    private fun applyAppTheme() {
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        val isNightMode = prefs.getBoolean(KEY_THEME, false)
 
-        if (isNightMode) {
-            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
-        } else {
-            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
-        }
-    }
 
     // Share toggleDisPlayMode on comicFragment and recentFragment
     private fun toggleDisplayMode() {

@@ -15,7 +15,6 @@ import android.view.View
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.documentfile.provider.DocumentFile
 import androidx.viewpager2.widget.ViewPager2
 import com.codecademy.comicreader.R
@@ -31,6 +30,7 @@ import java.util.Locale
 import androidx.core.net.toUri
 import androidx.core.content.edit
 import androidx.fragment.app.DialogFragment
+import com.codecademy.comicreader.theme.ThemeManager
 import com.codecademy.comicreader.utils.SystemUtil
 import com.codecademy.comicreader.view.sources.BitmapPageSource
 import com.codecademy.comicreader.view.sources.CBRPageSource
@@ -74,7 +74,7 @@ class ComicViewer : AppCompatActivity(), CoroutineScope {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        applyAppTheme()
+        ThemeManager.applyTheme(this)
 
         binding = ComicViewerBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -365,18 +365,7 @@ class ComicViewer : AppCompatActivity(), CoroutineScope {
     }
 
     private fun toggleDayNightMode() {
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        val isNightMode = prefs.getBoolean(KEY_THEME, false)
-        prefs.edit {
-            if (isNightMode) {
-                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
-                putBoolean(KEY_THEME, false)
-            } else {
-                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
-                putBoolean(KEY_THEME, true)
-            }
-        }
-        recreate() // Just this, icon update will happen in onCreate()
+        ThemeManager.toggleTheme(this)
     }
 
     private fun updateDayNightIcon() {
@@ -389,13 +378,6 @@ class ComicViewer : AppCompatActivity(), CoroutineScope {
         )
     }
 
-    private fun applyAppTheme() {
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        val isNightMode = prefs.getBoolean(KEY_THEME, false)
-        AppCompatDelegate.setDefaultNightMode(
-            if (isNightMode) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
-        )
-    }
 
     private fun updateScrollTypeOrientation() {
         val pref = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)

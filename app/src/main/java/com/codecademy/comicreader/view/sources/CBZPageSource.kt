@@ -6,7 +6,6 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import java.util.Locale
-import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 
 class CBZPageSource(
@@ -25,11 +24,13 @@ class CBZPageSource(
         try {
             context.contentResolver.openInputStream(uri)?.use { input ->
                 ZipInputStream(input).use { zis ->
-                    var entry: ZipEntry?
-                    while (zis.nextEntry.also { entry = it } != null) {
-                        val name = entry!!.name.lowercase(Locale.getDefault())
-                        if (!entry.isDirectory && name.matches(".*\\.(jpg|jpeg|png|webp)$".toRegex())) {
-                            imageNames.add(entry.name)
+                    while (true) {
+                        val currentEntry = zis.nextEntry ?: break  //  use local immutable variable
+                        val name = currentEntry.name.lowercase(Locale.getDefault())
+                        if (!currentEntry.isDirectory &&
+                            name.matches(Regex(".*\\.(jpg|jpeg|png|webp)$"))
+                        ) {
+                            imageNames.add(currentEntry.name)
                         }
                     }
                 }
@@ -52,9 +53,9 @@ class CBZPageSource(
         return try {
             context.contentResolver.openInputStream(uri)?.use { input ->
                 ZipInputStream(input).use { zis ->
-                    var entry: ZipEntry?
-                    while (zis.nextEntry.also { entry = it } != null) {
-                        if (entry!!.name == target) {
+                    while (true) {
+                        val currentEntry = zis.nextEntry ?: break  //  again: local immutable
+                        if (currentEntry.name == target) {
                             val options = BitmapFactory.Options().apply {
                                 inPreferredConfig = Bitmap.Config.ARGB_8888
                             }

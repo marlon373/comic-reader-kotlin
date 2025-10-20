@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    id("com.google.devtools.ksp") version "2.2.0-2.0.2"
+    id("com.google.devtools.ksp") version "1.9.24-1.0.20"
 
 }
 
@@ -43,7 +43,7 @@ android {
     buildFeatures {
         viewBinding = true
     }
-    // ✅ New Kotlin compilerOptions block
+    //  New Kotlin compilerOptions block
     kotlin {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_19)
@@ -51,7 +51,7 @@ android {
     }
 }
 
-// ✅ Pass schema location to Room via KSP (instead of annotationProcessorOptions)
+//  Pass schema location to Room via KSP (instead of annotationProcessorOptions)
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
