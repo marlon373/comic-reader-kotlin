@@ -16,8 +16,8 @@
         style="@style/CustomBackgroundColorComicDisplay">
 
         <!-- Folder Cover Image -->
-        <ImageButton
-            android:id="@+id/ibtn_comic_read"
+        <ImageView
+            android:id="@+id/iv_comic_read"
             android:layout_width="100dp"
             android:layout_height="150dp"
             android:contentDescription="@string/comic_cover"
@@ -31,10 +31,10 @@
             android:id="@+id/tv_comic_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_alignTop="@id/ibtn_comic_read"
+            android:layout_alignTop="@id/iv_comic_read"
             android:layout_marginStart="8dp"
             android:layout_marginEnd="62dp"
-            android:layout_toEndOf="@id/ibtn_comic_read"
+            android:layout_toEndOf="@id/iv_comic_read"
             android:ellipsize="end"
             android:maxLines="5"
             android:gravity="start"
@@ -54,7 +54,7 @@
             android:layout_below="@id/tv_comic_title"
             android:layout_marginStart="10dp"
             android:layout_marginTop="30dp"
-            android:layout_toEndOf="@id/ibtn_comic_read"
+            android:layout_toEndOf="@id/iv_comic_read"
             android:text="@string/comic_size"
             style="@style/CustomTextViewStyleComicDisplay"
             android:textSize="14sp" />
@@ -67,7 +67,7 @@
             android:layout_below="@id/tv_comic_size"
             android:layout_marginStart="10dp"
             android:layout_marginTop="-45dp"
-            android:layout_toEndOf="@id/ibtn_comic_read"
+            android:layout_toEndOf="@id/iv_comic_read"
             android:text="@string/comic_date"
             style="@style/CustomTextViewStyleComicDisplay"
             android:textSize="14sp" />
@@ -78,7 +78,7 @@
             style="@style/CustomTextViewStyleComicFormat"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_alignBottom="@id/ibtn_comic_read"
+            android:layout_alignBottom="@id/iv_comic_read"
             android:layout_alignParentEnd="true"
             android:layout_marginEnd="7dp"
             android:layout_marginBottom="7dp"
@@ -89,8 +89,8 @@
             tools:ignore="RelativeOverlap" />
 
         <!-- Menu Button -->
-        <ImageButton
-            android:id="@+id/ibtn_comic_menu"
+        <ImageView
+            android:id="@+id/iv_comic_menu"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignTop="@id/tv_comic_title"

@@ -18,8 +18,8 @@
         tools:ignore="TextSizeCheck">
 
 
-        <ImageButton
-            android:id="@+id/ibtn_comic_read"
+        <ImageView
+            android:id="@+id/iv_comic_read"
             android:layout_width="100dp"
             android:layout_height="150dp"
             android:layout_centerHorizontal="true"
@@ -34,7 +34,7 @@
             android:id="@+id/tv_comic_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_below="@id/ibtn_comic_read"
+            android:layout_below="@id/iv_comic_read"
             android:layout_centerHorizontal="true"
             android:layout_marginTop="7dp"
             android:ellipsize="end"
@@ -88,8 +88,8 @@
             style="@style/CustomTextViewStyleComicFormat"
             android:text="@string/comic_format" />
 
-        <ImageButton
-            android:id="@+id/ibtn_comic_menu"
+        <ImageView
+            android:id="@+id/iv_comic_menu"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignParentTop="true"
