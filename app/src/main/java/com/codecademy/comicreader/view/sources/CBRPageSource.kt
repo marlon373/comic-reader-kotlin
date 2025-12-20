@@ -4,93 +4,99 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.util.Log
-import com.github.junrar.Archive
-import com.github.junrar.rarfile.FileHeader
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
-import java.util.Locale
+import com.codecademy.comicreader.utils.MappedFileInStream
+import net.sf.sevenzipjbinding.IInArchive
+import net.sf.sevenzipjbinding.PropID
+import net.sf.sevenzipjbinding.SevenZip
+import java.io.ByteArrayOutputStream
+import java.io.FileInputStream
+import java.nio.channels.FileChannel
 
+/**
+ * CBRPageSource - reads RAR archives and exposes pages as Bitmap
+ */
 class CBRPageSource(context: Context, uri: Uri) : BitmapPageSource() {
-    private val tempFile: File
-    private val archive: Archive
-    private val imageHeaders: MutableList<FileHeader>
+
+    private val pfd: ParcelFileDescriptor
+    private val channel: FileChannel
+    private val inStream: MappedFileInStream
+    private val archive: IInArchive
+    private val imageIndices: List<Int>
 
     init {
-        this.tempFile = saveTempFile(context, uri)
+        // Keep ParcelFileDescriptor alive for the lifetime of this source
+        pfd = context.contentResolver.openFileDescriptor(uri, "r")
+            ?: throw RuntimeException("Cannot open CBR URI: $uri")
 
-        try {
-            this.archive = Archive(tempFile)
-        } catch (e: Exception) {
-            throw RuntimeException("Failed to open .cbr archive", e)
-        }
+        channel = FileInputStream(pfd.fileDescriptor).channel
+        inStream = MappedFileInStream(channel)
 
-        this.imageHeaders = archive.fileHeaders
-            .filter { h: FileHeader ->
-                !h.isDirectory && h.fileName.lowercase(Locale.getDefault())
-                    .matches(".*\\.(jpg|jpeg|png|webp)$".toRegex())
+        SevenZip.initSevenZipFromPlatformJAR()
+        archive = SevenZip.openInArchive(null, inStream)
+
+        // Build index list of image item indices (ordered)
+        imageIndices = (0 until archive.numberOfItems)
+            .filter { i ->
+                val isFolder = archive.getProperty(i, PropID.IS_FOLDER) as? Boolean ?: false
+                if (isFolder) return@filter false
+                val path = (archive.getProperty(i, PropID.PATH)?.toString() ?: "").lowercase()
+                path.endsWith(".jpg") || path.endsWith(".jpeg") ||
+                        path.endsWith(".png") || path.endsWith(".webp")
             }
-            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.fileName })
-            .toMutableList()
+            .sortedBy { archive.getProperty(it, PropID.PATH).toString() }
     }
 
-    private fun saveTempFile(context: Context, uri: Uri): File {
-        try {
-            val temp = File.createTempFile("comic_", ".cbr", context.cacheDir)
-            context.contentResolver.openInputStream(uri)?.use { `in` ->
-                FileOutputStream(temp).use { out ->
-                    val buffer = ByteArray(8192)
-                    var len: Int
-                    while ((`in`.read(buffer).also { len = it }) > 0) {
-                        out.write(buffer, 0, len)
-                    }
-                }
-            }
-            return temp
-        } catch (e: IOException) {
-            throw RuntimeException("Failed to save temp CBR file", e)
-        }
-    }
-
-    override fun getPageCount(): Int = imageHeaders.size
+    override fun getPageCount(): Int = imageIndices.size
 
     @Synchronized
     override fun getPageBitmap(index: Int): Bitmap? {
         getCached(index)?.let { return it }
-        if (index !in imageHeaders.indices) return null
+        if (index !in imageIndices.indices) return null
 
+        // Extract item bytes in-memory (only for requested page)
         return try {
-            val header = imageHeaders[index]
-            archive.getInputStream(header).use { inputStream ->
-                val options = BitmapFactory.Options().apply {
-                    inPreferredConfig = Bitmap.Config.ARGB_8888
-                }
-                val bmp = BitmapFactory.decodeStream(inputStream, null, options)
-                if (bmp != null) {
-                    cache(index, bmp)
-                    bmp
-                } else {
-                    createCorruptPlaceholder("Corrupt page $index")
-                }
+            val itemIndex = imageIndices[index]
+            val baos = ByteArrayOutputStream()
+
+            // NOTE: native extract may be blocking; called from IO dispatcher in loadPageAsync
+            archive.extractSlow(itemIndex) { data ->
+                baos.write(data)
+                data.size
             }
+
+            val bytes = baos.toByteArray()
+            // decode with inSampleSize to reduce memory
+            val opts = BitmapFactory.Options().apply {
+                inSampleSize = calculateInSampleSizeForTarget(bytes.size)
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+            val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+            bmp?.also { cache(index, it) } ?: createCorruptPlaceholder("Corrupt page $index")
         } catch (e: Exception) {
             Log.e("CBRPageSource", "Failed to decode page $index", e)
             createCorruptPlaceholder("Failed page $index")
         }
     }
 
-    fun close() {
-        try {
-            archive.close()
-        } catch (e: IOException) {
-            Log.e("CBRPageSource", "Failed to close archive", e)
-        }
-        if (tempFile.exists()) {
-            val deleted = tempFile.delete()
-            if (!deleted) {
-                Log.w("CBRPageSource", "Failed to delete temp file: ${tempFile.absolutePath}")
-            }
+    // Close resources, cancel outstanding loads
+    override fun closeSource() {
+        super.closeSource()
+        try { archive.close() } catch (_: Exception) {}
+        try { inStream.close() } catch (_: Exception) {}
+        try { channel.close() } catch (_: Exception) {}
+        try { pfd.close() } catch (_: Exception) {}
+    }
+
+    // Helper: basic heuristic to set inSampleSize based on compressed bytes
+    private fun calculateInSampleSizeForTarget(byteCount: Int): Int {
+        // grow sample size for large images — tune as needed
+        return when {
+            byteCount > 5_000_000 -> 4
+            byteCount > 2_000_000 -> 3
+            byteCount > 800_000 -> 2
+            else -> 1
         }
     }
 }
