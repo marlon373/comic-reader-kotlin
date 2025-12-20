@@ -30,24 +30,21 @@ import java.util.Locale
 import androidx.core.net.toUri
 import androidx.core.content.edit
 import androidx.fragment.app.DialogFragment
+import androidx.lifecycle.lifecycleScope
 import com.codecademy.comicreader.theme.ThemeManager
 import com.codecademy.comicreader.utils.SystemUtil
-import com.codecademy.comicreader.view.sources.BitmapPageSource
 import com.codecademy.comicreader.view.sources.CBRPageSource
 import com.codecademy.comicreader.view.sources.CBZPageSource
 import com.codecademy.comicreader.view.sources.ComicPageSource
 import com.codecademy.comicreader.view.sources.PDFPageSource
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.log10
 import kotlin.math.pow
 
-
-class ComicViewer : AppCompatActivity(), CoroutineScope {
+class ComicViewer : AppCompatActivity(){
     private lateinit var binding: ComicViewerBinding
     private lateinit var viewPager: ViewPager2
     private var adapter: PageRendererAdapter? = null
@@ -57,10 +54,10 @@ class ComicViewer : AppCompatActivity(), CoroutineScope {
     private lateinit var comicViewProgress: View
     private lateinit var tvPageNumber: TextView
     private lateinit var bottomSheetBehavior: BottomSheetBehavior<View>
-    private val job = SupervisorJob()
-    override val coroutineContext: CoroutineContext get() = Dispatchers.Main + job
+    private val mainScope get() = lifecycleScope
 
-    private val ioDispatcher by lazy { SystemUtil.createSmartDispatcher(applicationContext) }
+    private val ioDispatcher by lazy { SystemUtil.createIODispatcher(applicationContext) }
+    private val renderDispatcher by lazy { SystemUtil.createDispatcher() }
 
 
     companion object {
@@ -108,9 +105,7 @@ class ComicViewer : AppCompatActivity(), CoroutineScope {
         comicPath = intent.getStringExtra("comicPath")
         comicPath?.let { path ->
             val uri = path.toUri()
-            val ext = path.substringAfterLast('.').lowercase()
-
-            when (ext) {
+            when (val ext = path.substringAfterLast('.').lowercase()) {
                 "cbz" -> loadCBZLazy(uri)
                 "cbr" -> loadCBRLazy(uri)
                 "pdf" -> loadPDFLazy(uri)
@@ -123,8 +118,8 @@ class ComicViewer : AppCompatActivity(), CoroutineScope {
     private fun setupControls() {
         binding.imgbtnFirstPage.setOnClickListener { viewPager.currentItem = 0 }
         binding.imgbtnLastPage.setOnClickListener { viewPager.currentItem = pageSource!!.getPageCount() - 1 }
-        binding.imgbtnNextPage.setOnClickListener { viewPager.currentItem = viewPager.currentItem + 1 }
-        binding.imgbtnBackPage.setOnClickListener { viewPager.currentItem = viewPager.currentItem - 1 }
+        binding.imgbtnNextPage.setOnClickListener { viewPager.currentItem += 1 }
+        binding.imgbtnBackPage.setOnClickListener { viewPager.currentItem -= 1 }
 
         binding.imgbtnInfo.setOnClickListener {
             comicPath?.let { path -> showInfoDialog(path.toUri()) }
@@ -149,15 +144,24 @@ class ComicViewer : AppCompatActivity(), CoroutineScope {
 
         binding.viewPagerComic.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
-                Log.d("ComicViewer", "Switched to page: $position")
-                tvPageNumber.text = getString(R.string.pages, position + 1, pageSource?.getPageCount() ?: 0)
+                val source = pageSource ?: return  // prevent null crash
+                val count = source.getPageCount()
+                if (count == 0) return // avoid divide-by-zero UI glitch
+
+                // Ensure slider is properly initialized
+                val max = slider.valueTo.toInt()
+                if (max == 0 || max < position) return // slider not ready yet
+
+                // Update UI safely
+                tvPageNumber.text = getString(R.string.pages, position + 1, count)
                 slider.value = position.toFloat()
+
                 adapter?.resetZoomAt(position)
 
-                // Save current page
-                val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                prefs.edit { putInt(KEY_LAST_PAGE, position) }
+                // Save page (safe)
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit { putInt(KEY_LAST_PAGE, position) }
             }
+
         })
 
         slider.setOnTouchListener { view, event ->
@@ -210,7 +214,7 @@ class ComicViewer : AppCompatActivity(), CoroutineScope {
 
     private fun loadCBZLazy(uri: Uri) {
         comicViewProgress.visibility = View.VISIBLE
-        launch {
+        mainScope.launch {
             try {
                 val source = withContext(ioDispatcher) {
                     CBZPageSource(this@ComicViewer, uri)
@@ -219,6 +223,7 @@ class ComicViewer : AppCompatActivity(), CoroutineScope {
                 comicViewProgress.visibility = View.GONE
                 preloadPages()
             } catch (e: Exception) {
+                if (e is CancellationException) return@launch
                 showError("CBZ", e)
             }
         }
@@ -226,7 +231,7 @@ class ComicViewer : AppCompatActivity(), CoroutineScope {
 
     private fun loadCBRLazy(uri: Uri) {
         comicViewProgress.visibility = View.VISIBLE
-        launch {
+        mainScope.launch {
             try {
                 val source = withContext(ioDispatcher) {
                     CBRPageSource(this@ComicViewer, uri)
@@ -235,6 +240,7 @@ class ComicViewer : AppCompatActivity(), CoroutineScope {
                 comicViewProgress.visibility = View.GONE
                 preloadPages()
             } catch (e: Exception) {
+                if (e is CancellationException) return@launch
                 showError("CBR", e)
             }
         }
@@ -242,7 +248,7 @@ class ComicViewer : AppCompatActivity(), CoroutineScope {
 
     private fun loadPDFLazy(uri: Uri) {
         comicViewProgress.visibility = View.VISIBLE
-        launch {
+        mainScope.launch {
             try {
                 val source = withContext(ioDispatcher) {
                     PDFPageSource(this@ComicViewer, uri)
@@ -251,15 +257,15 @@ class ComicViewer : AppCompatActivity(), CoroutineScope {
                 comicViewProgress.visibility = View.GONE
                 preloadPages()
             } catch (e: Exception) {
+                if (e is CancellationException) return@launch
                 showError("PDF", e)
             }
         }
     }
 
-
     private fun preloadPages() {
         val source = pageSource ?: return
-        launch(ioDispatcher) {
+        mainScope.launch(ioDispatcher) {
             repeat(PRELOAD_PAGE_COUNT.coerceAtMost(source.getPageCount())) { i ->
                 source.getPageBitmap(i)
             }
@@ -277,15 +283,14 @@ class ComicViewer : AppCompatActivity(), CoroutineScope {
 
     private fun updateAdapter(pageSource: ComicPageSource) {
         this.pageSource = pageSource
-        adapter = PageRendererAdapter(this, pageSource, ioDispatcher)
+        adapter = PageRendererAdapter(pageSource, renderDispatcher)
         viewPager.adapter = adapter
 
         slider.valueFrom = 0f
         slider.valueTo = (pageSource.getPageCount() - 1).toFloat()
         slider.stepSize = 1f
         slider.value = 0f
-        tvPageNumber.text = getString(R.string.pages, 1, pageSource.getPageCount()
-        )
+        viewPager.post { tvPageNumber.text = getString(R.string.pages, viewPager.currentItem + 1, pageSource.getPageCount()) }
 
         // Restore last page (if enabled)
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
@@ -305,7 +310,7 @@ class ComicViewer : AppCompatActivity(), CoroutineScope {
     }
 
     private fun showInfoDialog(uri: Uri) {
-        launch(ioDispatcher) {
+        mainScope.launch(ioDispatcher) {
             try {
                 var name = "Unknown"
                 var size = "Unknown"
@@ -378,7 +383,6 @@ class ComicViewer : AppCompatActivity(), CoroutineScope {
         )
     }
 
-
     private fun updateScrollTypeOrientation() {
         val pref = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val isScrolling = pref.getBoolean(SCROLL_TYPE, false)
@@ -410,13 +414,18 @@ class ComicViewer : AppCompatActivity(), CoroutineScope {
 
     override fun onDestroy() {
         super.onDestroy()
+
+        viewPager.adapter = null
+
         adapter?.shutdown()
-        job.cancel()
-        when (val src = pageSource) {
-            is PDFPageSource -> src.close()
-            is CBRPageSource -> src.close()
-            is BitmapPageSource -> src.clear()
+        adapter = null
+
+        // Prevent double-cancel during rotation
+        if (isFinishing) {
+            pageSource?.closeSource()
         }
+
+        pageSource = null
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
