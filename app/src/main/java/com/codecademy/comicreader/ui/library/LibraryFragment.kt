@@ -37,13 +37,12 @@ import com.codecademy.comicreader.databinding.FragmentLibraryBinding
 import com.codecademy.comicreader.dialog.RemoveFolderDialog
 import com.codecademy.comicreader.model.Folder
 import com.codecademy.comicreader.utils.FolderUtils
+import com.codecademy.comicreader.utils.SystemUtil
 import com.codecademy.comicreader.view.ComicViewer
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Stack
-import java.util.concurrent.Executors
 
 class LibraryFragment : Fragment() {
 
@@ -53,11 +52,9 @@ class LibraryFragment : Fragment() {
     private val folderHistory: Stack<Uri> = Stack()
     private var selectedFolder: Folder? = null // To track the currently selected folder
     private var isItemSelected = false // Track selection state for action_delete visibility
-    private var isNavigating = false
+    private var navigationRestored = false
     private lateinit var libraryViewModel: LibraryViewModel
-    private val ioDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-
-
+    private val ioDispatcher = SystemUtil.createDispatcher()
 
     // Room database and DAO
     private lateinit var libraryDatabase: LibraryDatabase
@@ -93,8 +90,6 @@ class LibraryFragment : Fragment() {
         // FAB click opens the folder picker
         binding!!.fab.setOnClickListener { openFolderPicker() }
 
-        // Load saved folders
-        loadSavedFolders()
 
         // Menu provider
         requireActivity().addMenuProvider(object : MenuProvider {
@@ -111,15 +106,21 @@ class LibraryFragment : Fragment() {
                     android.R.id.home -> {
                         if (folderHistory.isNotEmpty()) {
                             folderHistory.pop()
+
                             if (folderHistory.isNotEmpty()) {
-                                val parentUri = folderHistory.peek()
-                                folderItems.clear()
-                                loadFolderContents(parentUri)
+                                loadFolderContentsWithoutPush(folderHistory.peek())
                             } else {
                                 resetToFolderList()
                             }
+
+                            libraryViewModel.saveFolderStack(folderHistory.map { it.toString() })
+                            libraryViewModel.setInFolderNavigation(folderHistory.isNotEmpty())
+
+                            updateToolbarNavigationIcon()
                             true
-                        } else false
+                        } else {
+                            false // allow drawer / fragment switching
+                        }
                     }
                     R.id.action_delete -> {
                         showRemoveFolderDialog()
@@ -132,12 +133,26 @@ class LibraryFragment : Fragment() {
 
         return view
     }
-
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        requireActivity().onBackPressedDispatcher.addCallback(
+            viewLifecycleOwner,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (!navigateBack()) requireActivity().finish()
+                }
+            }
+        )
+
         // Now it's safe to access ViewModel scoped to activity
         libraryViewModel = ViewModelProvider(requireActivity())[LibraryViewModel::class.java]
+
+        //  Restore navigation first
+        restoreNavigationState()
+
+        // Load root data only if needed
+        loadInitialDataIfNeeded()
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -151,12 +166,14 @@ class LibraryFragment : Fragment() {
                 launch {
                     //  Observe folders or perform setup
                     libraryViewModel.folders.collect { folders ->
+                        if (libraryViewModel.isInFolderNavigation()) return@collect  // THIS IS THE FIX
                         Log.d("LibraryFragment", "Observed folders: ${folders.size}")
                         folderItems.clear()
                         folderItems.addAll(folders)
                         libraryFolderAdapter?.notifyDataSetChanged()
                         updateEmptyMessageVisibility()
                     }
+
                 }
             }
         }
@@ -178,7 +195,7 @@ class LibraryFragment : Fragment() {
 
         // Adapter setup (if not yet set)
         if (libraryFolderAdapter == null) {
-            libraryFolderAdapter = LibraryFolderAdapter(folderItems, { item: Folder -> this.onFolderClicked(item) }, { item: Folder?, itemView: View? -> this.onFolderLongClicked(item!!, itemView!!) }
+            libraryFolderAdapter = LibraryFolderAdapter(folderItems, { item: Folder -> this.onFolderClicked(item) }, { item: Folder?, _: View? -> this.onFolderLongClicked(item!!) }
             )
             binding!!.rvComicLibrary.setAdapter(libraryFolderAdapter)
         } else {
@@ -198,6 +215,57 @@ class LibraryFragment : Fragment() {
             setHomeAsUpIndicator(null) // Use default back arrow
         }
     }
+
+    private fun updateToolbarNavigationIcon() {
+        val activity = activity as? AppCompatActivity ?: return
+        val actionBar = activity.supportActionBar ?: return
+
+        if (folderHistory.isNotEmpty()) {
+            // Folder navigation → back arrow
+            actionBar.setDisplayHomeAsUpEnabled(true)
+            actionBar.setHomeAsUpIndicator(null)
+        } else {
+            // Root → hamburger menu
+            actionBar.setDisplayHomeAsUpEnabled(false)
+            (activity as? MainActivity)?.setupHamburgerMenu()
+        }
+    }
+
+    private fun navigateBack(): Boolean {
+        if (folderHistory.isNotEmpty()) {
+            folderHistory.pop()
+
+            if (folderHistory.isNotEmpty()) {
+                loadFolderContentsWithoutPush(folderHistory.peek())
+            } else {
+                resetToFolderList()
+            }
+
+            libraryViewModel.saveFolderStack(folderHistory.map { it.toString() })
+            libraryViewModel.setInFolderNavigation(folderHistory.isNotEmpty())
+            updateToolbarNavigationIcon()
+            return true
+        }
+        return false
+    }
+
+    private fun restoreNavigationState() {
+        if (navigationRestored) return
+
+        val stack = libraryViewModel.restoreFolderStack()
+        libraryViewModel.isInFolderNavigation()
+
+        if (stack.isNotEmpty()) {
+            folderHistory.clear()
+            stack.forEach { folderHistory.push(it.toUri()) }
+
+            loadFolderContentsWithoutPush(folderHistory.peek())
+            updateToolbarNavigationIcon()
+        }
+
+        navigationRestored = true
+    }
+
 
     // Shows or hides the empty folder message based on folder availability
     private fun updateEmptyMessageVisibility() {
@@ -254,6 +322,14 @@ class LibraryFragment : Fragment() {
         setFirstAppLaunchCompleted()
     }
 
+    private fun loadInitialDataIfNeeded() {
+        if (libraryViewModel.isInFolderNavigation()) {
+            // We are restoring folder navigation
+            return
+        }
+        loadSavedFolders()
+    }
+
     // Loads saved folders from the database
     private fun loadSavedFolders() {
         viewLifecycleOwner.lifecycleScope.launch(ioDispatcher) {
@@ -280,46 +356,71 @@ class LibraryFragment : Fragment() {
         }
     }
 
-
     // Loads the contents of a selected folder
     private fun loadFolderContents(uri: Uri) {
+
+        //  Prevent duplicate push on rotation / restore
         if (folderHistory.isNotEmpty() && folderHistory.peek() == uri) {
-            folderItems.clear()
-        } else {
-            folderHistory.push(uri)
+            return
         }
 
-        isNavigating = true
+        folderHistory.push(uri)
         folderItems.clear()
 
         val directory = DocumentFile.fromTreeUri(requireContext(), uri)
         if (directory != null && directory.isDirectory) {
-            for (file in directory.listFiles()) {
-                folderItems.add(Folder(file.name ?: "Unknown", file.uri.toString(), file.isDirectory))
+            directory.listFiles().forEach {
+                folderItems.add(Folder(it.name ?: "Unknown", it.uri.toString(), it.isDirectory))
             }
-            binding?.tvLibrary?.visibility = View.GONE
+
             setToolbarBackButtonEnabled(true)
             updateToolbarTitle(directory.name ?: "Folder")
-        } else {
-            Toast.makeText(requireContext(), "Unable to open folder", Toast.LENGTH_SHORT).show()
+            binding?.tvLibrary?.visibility = View.GONE
+            binding?.fab?.visibility = View.GONE
         }
 
-        binding?.fab?.visibility = View.GONE
+        updateToolbarNavigationIcon()
+
+        // Correct place to persist navigation state
+        libraryViewModel.saveFolderStack(folderHistory.map { it.toString() })
+        libraryViewModel.setInFolderNavigation(true)
+
+        libraryFolderAdapter?.notifyDataSetChanged()
+    }
+
+    private fun loadFolderContentsWithoutPush(uri: Uri) {
+
+        folderItems.clear()
+
+        val directory = DocumentFile.fromTreeUri(requireContext(), uri)
+        if (directory != null && directory.isDirectory) {
+            directory.listFiles().forEach {
+                folderItems.add(Folder(it.name ?: "Unknown", it.uri.toString(), it.isDirectory))
+            }
+
+            binding?.tvLibrary?.visibility = View.GONE
+            binding?.fab?.visibility = View.GONE
+            updateToolbarTitle(directory.name ?: "Folder")
+        }
+
+        updateToolbarNavigationIcon()
         libraryFolderAdapter?.notifyDataSetChanged()
     }
 
     // Resets the view back to the folder list
     private fun resetToFolderList() {
-        isNavigating = false
         folderHistory.clear()
-        folderItems.clear()
-        loadSavedFolders()
 
         setToolbarBackButtonEnabled(false)
+        updateToolbarTitle(getString(R.string.app_name))
         binding?.tvLibrary?.visibility = View.VISIBLE
-        (activity as? MainActivity)?.setupHamburgerMenu()
         binding?.fab?.visibility = View.VISIBLE
-        libraryFolderAdapter?.notifyDataSetChanged()
+
+        loadSavedFolders()
+        updateToolbarNavigationIcon()
+
+        libraryViewModel.saveFolderStack(emptyList())
+        libraryViewModel.setInFolderNavigation(false)
     }
 
     // Open CBR,CBZ and PDF file
@@ -354,9 +455,7 @@ class LibraryFragment : Fragment() {
     }
 
     // Handles folder long-click for selection
-    private fun onFolderLongClicked(item: Folder, itemView: View) {
-        // Do not allow selection mode while navigating inside subfolders
-        if (isNavigating) return
+    private fun onFolderLongClicked(item: Folder) {
 
         // Toggle selection
         if (selectedFolder == item) {
@@ -415,30 +514,8 @@ class LibraryFragment : Fragment() {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner,
-            object : OnBackPressedCallback(true) {
-                override fun handleOnBackPressed() {
-                    if (folderHistory.isNotEmpty()) {
-                        folderHistory.pop()
-                        if (folderHistory.isNotEmpty()) {
-                            val parentUri = folderHistory.peek()
-                            folderItems.clear()
-                            loadFolderContents(parentUri)
-                        } else {
-                            resetToFolderList()
-                        }
-                    } else {
-                        requireActivity().finish()
-                    }
-                }
-            })
-    }
-
     override fun onDestroyView() {
         super.onDestroyView()
-        ioDispatcher.close() // shuts down the underlying single thread
         binding = null
     }
 }
