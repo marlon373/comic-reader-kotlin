@@ -1,9 +1,10 @@
 package com.codecademy.comicreader.view
 
-import android.content.Context
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
 import android.widget.ProgressBar
 import androidx.recyclerview.widget.RecyclerView
@@ -15,76 +16,83 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.coroutines.CoroutineContext
 
 
+/**
+ * Adapter for rendering pages from a ComicPageSource or BitmapPageSource
+ */
 class PageRendererAdapter(
-    private val context: Context,
     private val pageSource: ComicPageSource,
-    private val ioDispatcher: CoroutineDispatcher
-) : RecyclerView.Adapter<PageRendererAdapter.PageViewHolder>(), CoroutineScope {
+    renderDispatcher: CoroutineDispatcher
+) : RecyclerView.Adapter<PageRendererAdapter.PageViewHolder>() {
 
-    private val job = SupervisorJob()
-    override val coroutineContext: CoroutineContext = ioDispatcher + job
+    private val renderScope = CoroutineScope(SupervisorJob() + renderDispatcher)
 
-    private val holderRefs: MutableMap<Int, WeakReference<PageViewHolder>> = HashMap()
+    private val holderRefs = mutableMapOf<Int, WeakReference<PageViewHolder>>()
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PageViewHolder {
         val container = FrameLayout(parent.context).apply {
             layoutParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
+                MATCH_PARENT,
+                MATCH_PARENT
             )
         }
         return PageViewHolder(container)
     }
 
     override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
-        val parent = holder.itemView as FrameLayout
-        parent.removeAllViews()
-        parent.addView(holder.photoView)
-        parent.addView(holder.progressBar)
+        val container = holder.itemView as FrameLayout
+        container.removeAllViews()
+        container.addView(holder.photoView)
+        container.addView(holder.progressBar)
 
         holder.progressBar.visibility = View.VISIBLE
         holder.photoView.setImageBitmap(null)
 
-        val bindingPosition = position
-        holderRefs[bindingPosition] = WeakReference(holder)
+        holderRefs[position] = WeakReference(holder)
 
-        // Coroutine-based page loading
-        launch {
-            try {
-                val bmp = withContext(ioDispatcher) {
-                    pageSource.getPageBitmap(bindingPosition)
-                }
+        // Cancel previous decode
+        pageSource.cancelLoad(position)
 
-                withContext(Dispatchers.Main) {
-                    // Skip if holder is reused
-                    if (holder.bindingAdapterPosition != bindingPosition) return@withContext
-                    holder.progressBar.visibility = View.GONE
-                    holder.photoView.setImageBitmap(bmp)
-                }
+        // Async mode (fast + avoids flicker)
+        if (pageSource is BitmapPageSource) {
+            pageSource.loadPageAsync(position) { bmp ->
+                val ref = holderRefs[position]?.get() ?: return@loadPageAsync
+                if (ref.bindingAdapterPosition != position) return@loadPageAsync
 
-            } catch (_: Exception) {
-                withContext(Dispatchers.Main) {
-                    holder.progressBar.visibility = View.GONE
-                    holder.photoView.setImageDrawable(null)
-                }
+                ref.progressBar.visibility = View.GONE
+                ref.photoView.setImageBitmap(bmp)
+            }
+            return
+        }
+
+        // Sync mode (fallback)
+        renderScope.launch {
+            val bmp = try { pageSource.getPageBitmap(position) }
+            catch (_: Exception) { null }
+
+            withContext(Dispatchers.Main) {
+                if (holder.bindingAdapterPosition != position) return@withContext
+                holder.progressBar.visibility = View.GONE
+                holder.photoView.setImageBitmap(bmp)
             }
         }
     }
 
-    override fun getItemCount(): Int = pageSource.getPageCount()
-
     override fun onViewRecycled(holder: PageViewHolder) {
-        super.onViewRecycled(holder)
-        val position = holder.bindingAdapterPosition
-        if (position != RecyclerView.NO_POSITION) {
-            holderRefs.remove(position)
+        val pos = holder.bindingAdapterPosition
+        if (pos != RecyclerView.NO_POSITION) {
+            holderRefs.remove(pos)
+            pageSource.cancelLoad(pos)
         }
+
         holder.photoView.setImageDrawable(null)
+        holder.photoView.setScale(1f, false)
+
+        super.onViewRecycled(holder)
     }
 
     fun resetZoomAt(position: Int) {
@@ -92,11 +100,12 @@ class PageRendererAdapter(
     }
 
     fun shutdown() {
-        job.cancel() // Cancels coroutines
-        if (pageSource is BitmapPageSource) {
-            pageSource.clear()
-        }
+        renderScope.cancel()
+        holderRefs.clear()
+        pageSource.closeSource()
     }
+
+    override fun getItemCount(): Int = pageSource.getPageCount()
 
     class PageViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val photoView: PhotoView
@@ -107,19 +116,17 @@ class PageRendererAdapter(
 
             photoView = PhotoView(container.context).apply {
                 layoutParams = FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
+                    MATCH_PARENT,
+                    MATCH_PARENT
                 )
             }
 
             progressBar = ProgressBar(container.context).apply {
-                val pbParams = FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
+                layoutParams = FrameLayout.LayoutParams(
+                    WRAP_CONTENT,
+                    WRAP_CONTENT,
+                    Gravity.CENTER
                 )
-                pbParams.gravity = Gravity.CENTER
-                layoutParams = pbParams
-                isIndeterminate = true
             }
 
             container.addView(photoView)
@@ -127,6 +134,8 @@ class PageRendererAdapter(
         }
     }
 }
+
+
 
 
 
