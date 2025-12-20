@@ -4,75 +4,78 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.util.Log
-import java.util.Locale
-import java.util.zip.ZipInputStream
+import com.codecademy.comicreader.utils.MappedFileInStream
+import net.sf.sevenzipjbinding.IInArchive
+import net.sf.sevenzipjbinding.PropID
+import net.sf.sevenzipjbinding.SevenZip
+import java.io.ByteArrayOutputStream
+import java.io.FileInputStream
 
-class CBZPageSource(
-    private val context: Context,
-    private val uri: Uri
-) : BitmapPageSource() {
+/**
+ * CBZPageSource - reads ZIP/CBZ archives and exposes pages as Bitmap
+ */
+class CBZPageSource(context: Context, uri: Uri) : BitmapPageSource() {
 
-    private val imageMap = mutableMapOf<Int, String>()
+    private val pfd: ParcelFileDescriptor
+    private val inStream: MappedFileInStream
+    private val archive: IInArchive
+    private val imageIndices: List<Int>
 
     init {
-        preloadImageList()
-    }
+        // Keep PFD alive
+        pfd = context.contentResolver.openFileDescriptor(uri, "r")
+            ?: throw RuntimeException("Cannot open CBZ URI: $uri")
 
-    private fun preloadImageList() {
-        val imageNames = mutableListOf<String>()
-        try {
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                ZipInputStream(input).use { zis ->
-                    while (true) {
-                        val currentEntry = zis.nextEntry ?: break  //  use local immutable variable
-                        val name = currentEntry.name.lowercase(Locale.getDefault())
-                        if (!currentEntry.isDirectory &&
-                            name.matches(Regex(".*\\.(jpg|jpeg|png|webp)$"))
-                        ) {
-                            imageNames.add(currentEntry.name)
-                        }
-                    }
-                }
+        val channel = FileInputStream(pfd.fileDescriptor).channel
+        inStream = MappedFileInStream(channel)
+
+        SevenZip.initSevenZipFromPlatformJAR()
+        archive = SevenZip.openInArchive(null, inStream)
+
+        // Get indices of image entries
+        imageIndices = (0 until archive.numberOfItems)
+            .filter { i ->
+                val isFolder = archive.getProperty(i, PropID.IS_FOLDER) as? Boolean ?: false
+                if (isFolder) return@filter false
+                val path = (archive.getProperty(i, PropID.PATH)?.toString() ?: "").lowercase()
+                path.endsWith(".jpg") || path.endsWith(".jpeg") ||
+                        path.endsWith(".png") || path.endsWith(".webp")
             }
-        } catch (e: Exception) {
-            Log.e("CBZPageSource", "Error indexing zip", e)
-        }
-
-        imageNames.sortWith(String.CASE_INSENSITIVE_ORDER)
-        imageNames.forEachIndexed { i, name -> imageMap[i] = name }
+            .sortedBy { archive.getProperty(it, PropID.PATH).toString() }
     }
 
-    override fun getPageCount(): Int = imageMap.size
+    override fun getPageCount(): Int = imageIndices.size
 
     @Synchronized
     override fun getPageBitmap(index: Int): Bitmap? {
         getCached(index)?.let { return it }
-        val target = imageMap[index] ?: return createCorruptPlaceholder("Missing page $index")
+        if (index !in imageIndices.indices) return createCorruptPlaceholder("Missing page $index")
 
         return try {
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                ZipInputStream(input).use { zis ->
-                    while (true) {
-                        val currentEntry = zis.nextEntry ?: break  //  again: local immutable
-                        if (currentEntry.name == target) {
-                            val options = BitmapFactory.Options().apply {
-                                inPreferredConfig = Bitmap.Config.ARGB_8888
-                            }
-                            val bmp = BitmapFactory.decodeStream(zis, null, options)
-                            if (bmp != null) {
-                                cache(index, bmp)
-                                return bmp
-                            }
-                            return createCorruptPlaceholder("Corrupt page $index")
-                        }
-                    }
-                }
+            val itemIndex = imageIndices[index]
+            val baos = ByteArrayOutputStream()
+
+            archive.extractSlow(itemIndex) { data ->
+                baos.write(data)
+                data.size
             }
-            createCorruptPlaceholder("Not found $index")
+
+            val bytes = baos.toByteArray()
+            val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+            val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+            bmp?.also { cache(index, it) } ?: createCorruptPlaceholder("Corrupt page $index")
         } catch (e: Exception) {
-            Log.e("CBZPageSource", "Error reading image: $target", e)
-            createCorruptPlaceholder("Error page $index")
+            Log.e("CBZPageSource", "Failed to decode page $index", e)
+            createCorruptPlaceholder("Failed page $index")
         }
     }
+
+    override fun closeSource() {
+        try { archive.close() } catch (_: Exception) {}
+        try { inStream.close() } catch (_: Exception) {}
+        try { pfd.close() } catch (_: Exception) {}
+    }
 }
+
