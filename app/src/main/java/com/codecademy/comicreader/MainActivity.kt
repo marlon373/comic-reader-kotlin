@@ -80,18 +80,18 @@ class MainActivity : AppCompatActivity() {
         navigationView.setupWithNavController(navController)
 
         // Listen for destination changes and refresh menu
-        navController.addOnDestinationChangedListener { controller: NavController?, destination: NavDestination?, arguments: Bundle? ->
+        navController.addOnDestinationChangedListener { _: NavController?, _: NavDestination?, _: Bundle? ->
             invalidateOptionsMenu() // Refresh menu when destination changes
         }
     }
-
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         menu.clear() // Clear the previous menu
         val navController = findNavController(this, R.id.nav_host_fragment_content_main)
 
-        val currentDestination = navController.currentDestination
-        if (currentDestination == null) return super.onPrepareOptionsMenu(menu) // Prevent crashes
+        val currentDestination =
+            navController.currentDestination ?: return super.onPrepareOptionsMenu(menu)
+        // Prevent crashes
 
 
         val currentDestinationId = currentDestination.id
@@ -145,7 +145,7 @@ class MainActivity : AppCompatActivity() {
 
         // === Action: SORT ===
         val sort = popupView.findViewById<View?>(R.id.action_sort)
-        sort?.setOnClickListener { v: View? ->
+        sort?.setOnClickListener { _: View? ->
             openSortDialog()
             popupWindow.dismiss()
         }
@@ -162,7 +162,7 @@ class MainActivity : AppCompatActivity() {
                 0,
                 0
             )
-            display.setOnClickListener { v: View? ->
+            display.setOnClickListener { _: View? ->
                 toggleDisplayMode()
                 popupWindow.dismiss()
             }
@@ -180,7 +180,7 @@ class MainActivity : AppCompatActivity() {
                 0,
                 0
             )
-            dayNight.setOnClickListener { v: View? ->
+            dayNight.setOnClickListener { _: View? ->
                 toggleDayNightMode() // Toggle mode
                 popupWindow.dismiss()
             }
@@ -188,7 +188,7 @@ class MainActivity : AppCompatActivity() {
 
         // === Action: CLEAR ALL (only in recent layout) ===
         val clearAll = popupView.findViewById<View?>(R.id.action_clear_all)
-        clearAll?.setOnClickListener { v: View? ->
+        clearAll?.setOnClickListener { _: View? ->
             openClearAllDialog()
             popupWindow.dismiss()
         }
@@ -199,8 +199,6 @@ class MainActivity : AppCompatActivity() {
     private fun toggleDayNightMode() {
         ThemeManager.toggleTheme(this)
     }
-
-
 
     // Share toggleDisPlayMode on comicFragment and recentFragment
     private fun toggleDisplayMode() {

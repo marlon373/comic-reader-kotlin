@@ -13,7 +13,7 @@ class RecentViewModel : ViewModel() {
     private val _recentComics = MutableStateFlow<List<Comic>>(emptyList())
     val recentComics: StateFlow<List<Comic>> = _recentComics
 
-    /** Add a comic to the recent list (no duplicates, keep newest first, limit to 20). */
+    // Add a comic to the recent list (no duplicates, keep newest first, limit to 20)
     fun addComicToRecent(comic: Comic) {
         _recentComics.update { currentList ->
             val newList = currentList.toMutableList().apply {
@@ -24,7 +24,7 @@ class RecentViewModel : ViewModel() {
         }
     }
 
-    /** Replace the entire recent list */
+    // Replace the entire recent list
     fun setRecentComics(comics: List<Comic>) {
         _recentComics.value = comics.take(20) // Limit to 20 just in case
     }

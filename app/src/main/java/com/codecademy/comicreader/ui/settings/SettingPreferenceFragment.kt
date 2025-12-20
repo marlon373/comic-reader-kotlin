@@ -37,7 +37,6 @@ class SettingPreferenceFragment : PreferenceFragmentCompat() {
                 prefs.edit { putBoolean("isNightMode", enableNight) }
 
                 ThemeManager.applyTheme(requireContext())
-                requireActivity().recreate()
                 true
             }
         }
