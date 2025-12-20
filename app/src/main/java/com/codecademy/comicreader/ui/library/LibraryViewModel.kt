@@ -1,5 +1,6 @@
 package com.codecademy.comicreader.ui.library
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import com.codecademy.comicreader.model.Folder
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -9,7 +10,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-class LibraryViewModel : ViewModel() {
+class LibraryViewModel(private val savedStateHandle: SavedStateHandle) : ViewModel() {
+
+    companion object {
+        private const val KEY_FOLDER_STACK = "folder_stack"
+        private const val KEY_IN_NAVIGATION = "in_folder_navigation"
+    }
 
     private val _folders = MutableStateFlow<List<Folder>>(emptyList())
     val folders: StateFlow<List<Folder>> = _folders.asStateFlow()
@@ -37,4 +43,21 @@ class LibraryViewModel : ViewModel() {
     suspend fun notifyFolderRemoved() {
         _folderRemoved.emit(Unit)
     }
+
+    fun saveFolderStack(stack: List<String>) {
+        savedStateHandle[KEY_FOLDER_STACK] = stack
+    }
+
+    fun restoreFolderStack(): List<String> {
+        return savedStateHandle[KEY_FOLDER_STACK] ?: emptyList()
+    }
+
+    fun setInFolderNavigation(value: Boolean) {
+        savedStateHandle[KEY_IN_NAVIGATION] = value
+    }
+
+    fun isInFolderNavigation(): Boolean {
+        return savedStateHandle[KEY_IN_NAVIGATION] ?: false
+    }
+
 }
