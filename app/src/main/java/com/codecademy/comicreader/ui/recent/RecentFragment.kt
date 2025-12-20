@@ -36,16 +36,18 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.RecyclerView
 import com.codecademy.comicreader.utils.SystemUtil
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.first
 
 
 class RecentFragment : Fragment() {
     private var binding: FragmentRecentBinding? = null
-    private var comicAdapter: ComicAdapter? = null
+    private lateinit var comicAdapter: ComicAdapter
     private val recentComics = mutableListOf<Comic>()
     private var isGridView: Boolean = true
     private lateinit var recentViewModel: RecentViewModel
-    private val ioDispatcher by lazy { SystemUtil.createSmartDispatcher(requireContext()) }
+    private lateinit var appContext: Context
+    private lateinit var ioDispatcher: CoroutineDispatcher
 
 
     companion object {
@@ -58,12 +60,14 @@ class RecentFragment : Fragment() {
         binding = FragmentRecentBinding.inflate(inflater, container, false)
         val view = binding!!.root
 
+        appContext = requireActivity().applicationContext
+        ioDispatcher = SystemUtil.createIODispatcher(appContext)
         recentViewModel = ViewModelProvider(requireActivity())[RecentViewModel::class.java]
 
         loadPreferences()
         setupRecyclerView()
 
-        comicAdapter = ComicAdapter(recentComics, ::onComicClicked, isGridView, requireContext(),ioDispatcher)
+        comicAdapter = ComicAdapter(recentComics, ::onComicClicked, isGridView, requireContext())
         binding!!.rvRecentDisplay.adapter = comicAdapter
 
         //  Observe the flow instead of LiveData
@@ -72,10 +76,11 @@ class RecentFragment : Fragment() {
                 recentViewModel.recentComics.collect { comics ->
                     recentComics.clear()
                     recentComics.addAll(comics)
-                    comicAdapter?.notifyDataSetChanged()
+                    comicAdapter.notifyDataSetChanged()
                 }
             }
         }
+
 
         loadSortPreferences()
 
@@ -96,18 +101,28 @@ class RecentFragment : Fragment() {
 
     fun toggleDisplayMode() {
         val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        var isGridViewPref = prefs.getBoolean(KEY_DISPLAY_MODE, true)
+        val current = prefs.getBoolean(KEY_DISPLAY_MODE, true)
+        val newGrid = !current
+        prefs.edit { putBoolean(KEY_DISPLAY_MODE, newGrid) }
 
-        isGridViewPref = !isGridViewPref
-        prefs.edit { putBoolean(KEY_DISPLAY_MODE, isGridViewPref) }
+        Log.d("RecentFragment", "toggleDisplayMode: Switched to ${if (newGrid) "Grid View" else "List View"}")
 
-        Log.d("RecentFragment", "toggleDisplayMode: Switched to ${if (isGridViewPref) "Grid" else "List"} View")
+        // 1) Update LayoutManager only
+        val layoutManager = getLayoutManager(newGrid)
+        binding?.rvRecentDisplay?.layoutManager = layoutManager
 
-        setupRecyclerView()
-
-        comicAdapter = ComicAdapter(recentComics, ::onComicClicked, isGridViewPref, requireContext(),ioDispatcher)
-        binding?.rvRecentDisplay?.adapter = comicAdapter
-        comicAdapter?.notifyDataSetChanged()
+        // 2) Inform adapter of mode change (adapter instance stays the same)
+        if (::comicAdapter.isInitialized) {
+            // update adapter state and rebind items
+            comicAdapter.isGridView = newGrid
+            // notify to re-create view holders according to new viewType
+            comicAdapter.notifyDataSetChanged()
+        } else {
+            // Fallback: create adapter if somehow not initialized (keeps single creation rule)
+            comicAdapter = ComicAdapter(recentComics, this::onComicClicked, newGrid, requireContext())
+            binding?.rvRecentDisplay?.adapter = comicAdapter
+        }
+        // 3) Save any additional UI state if needed (already done via prefs)
     }
 
     // Updates RecyclerView LayoutManager
@@ -169,11 +184,8 @@ class RecentFragment : Fragment() {
         }
     }
 
-
-
     private fun recentComicList(newComics: List<Comic>): MutableList<Comic> {
-        val context = requireContext()
-        val prefs = context.getSharedPreferences("removed_comics", Context.MODE_PRIVATE)
+        val prefs = appContext.getSharedPreferences("removed_comics", Context.MODE_PRIVATE)
         val removedPaths = prefs.getStringSet("removed_paths", HashSet()) ?: HashSet()
 
         val validComics = mutableListOf<Comic>()
@@ -184,7 +196,7 @@ class RecentFragment : Fragment() {
                 continue
             }
 
-            val file = DocumentFile.fromSingleUri(context, comic.path.toUri())
+            val file = DocumentFile.fromSingleUri(appContext, comic.path.toUri())
             if (file != null && file.exists()) {
                 validComics.add(comic)
             } else {
@@ -201,7 +213,7 @@ class RecentFragment : Fragment() {
             return
         }
 
-        val prefs = requireActivity().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val criteria = prefs.getString("sort_criteria", "name") ?: "name"
         val isAscending = prefs.getBoolean(KEY_SORT_MODE, true)
 
@@ -229,7 +241,7 @@ class RecentFragment : Fragment() {
     }
 
     private fun applySorting(criteria: String, isAscending: Boolean) {
-        val prefs = requireActivity().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit {
             putString("sort_criteria", criteria)
                 .putBoolean(KEY_SORT_MODE, isAscending)
@@ -250,7 +262,7 @@ class RecentFragment : Fragment() {
         if (isAscending) recentComics.sortWith(comparator)
         else recentComics.sortWith(comparator.reversed())
 
-        comicAdapter?.updateComicList(recentComics.toList())
+        comicAdapter.updateComicList(recentComics.toList())
 
         Log.d("RecentFragment", "applySorting: Sorted by $criteria | Ascending: $isAscending")
     }
@@ -282,8 +294,8 @@ class RecentFragment : Fragment() {
     }
 
     override fun onDestroyView() {
-        binding = null
         super.onDestroyView()
+        binding = null
     }
 }
 
