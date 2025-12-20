@@ -1,17 +1,12 @@
 package com.codecademy.comicreader.ui.comic
 
+
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.provider.DocumentsContract
-import android.util.Log
-import android.util.LruCache
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.PopupWindow
 import android.widget.TextView
@@ -22,101 +17,68 @@ import com.codecademy.comicreader.R
 import com.codecademy.comicreader.dialog.InfoDialog
 import com.codecademy.comicreader.dialog.RemoveFileDialog
 import com.codecademy.comicreader.model.Comic
-import com.github.junrar.Archive
-import java.io.File
-import java.io.FileOutputStream
-import java.util.zip.ZipInputStream
 import androidx.core.net.toUri
 import androidx.core.content.edit
-import androidx.core.graphics.createBitmap
-import androidx.core.graphics.scale
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Job
+
 
 class ComicAdapter(
-    private val comicList: MutableList<Comic>,         // list of comics displayed
-    private val listener: (Comic) -> Unit,             // click callback for "read" button
-    private val isGridView: Boolean,                   // grid or list mode
-    private val context: Context,
-    private val sharedDispatcher: CoroutineDispatcher  // Coroutine dispatcher passed from Fragment
+    private val comicList: MutableList<Comic>,
+    private val listener: (Comic) -> Unit,
+    isGrid: Boolean,
+    private val context: Context
 ) : RecyclerView.Adapter<ComicAdapter.ViewHolder>() {
 
-    companion object {
-        private val MAX_CACHE_SIZE = (Runtime.getRuntime().maxMemory() / 1024 / 4).toInt()
+    // public mutable property so fragment can flip it without recreating adapter
+    @Volatile
+    var isGridView: Boolean = isGrid
 
-        private val memoryCache = object : LruCache<String, Bitmap>(MAX_CACHE_SIZE) {
-            override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount / 1024
-        }
+    // Keep track of thumbnail loading jobs per ImageView (weak refs to avoid leaks)
+    private val thumbnailJobs = mutableMapOf<Int, Job>() // keyed by viewId hashCode
 
-        private var cleanupDone = false
-        
-
-        // Convert SAF or content URI to readable path
-        fun getReadablePath(context: Context, uri: Uri): String {
-            try {
-                val docId = DocumentsContract.getDocumentId(uri)
-                val parts = docId.split(":")
-                if (parts.size == 2) {
-                    val volume = parts[0]
-                    val path = parts[1]
-                    return if (volume == "primary") "/storage/emulated/0/$path"
-                    else "/storage/$volume/$path"
-                }
-            } catch (_: Exception) {}
-
-            return try {
-                val file = DocumentFile.fromSingleUri(context, uri)
-                file?.name ?: uri.toString()
-            } catch (_: Exception) { uri.toString() }
-        }
-
-        // Delete old thumbnails from cacheDir (older than maxAgeDays)
-        fun cleanupOldThumbnails(context: Context, maxAgeDays: Int = 30) {
-            if (cleanupDone) return
-            try {
-                val cacheDir = context.cacheDir
-                val now = System.currentTimeMillis()
-                val maxAgeMillis = maxAgeDays * 24 * 60 * 60 * 1000L
-                cacheDir.listFiles { file -> file.name.startsWith("thumb_") && file.name.endsWith(".jpg") }
-                    ?.forEach { file ->
-                        if (now - file.lastModified() > maxAgeMillis) file.delete()
-                    }
-                cleanupDone = true
-            } catch (e: Exception) {
-                Log.e("ComicAdapter", "Failed to clean thumbnails", e)
-            }
-        }
-    }
-
-    init {
-        cleanupOldThumbnails(context.applicationContext)
+    override fun getItemViewType(position: Int): Int {
+        // Use viewType to signal which layout to inflate in onCreateViewHolder
+        return if (isGridView) VIEW_TYPE_GRID else VIEW_TYPE_LIST
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val layoutId = if (isGridView) R.layout.comic_grid_view_display else R.layout.comic_list_view_display
+        val layoutId = if (viewType == VIEW_TYPE_GRID) R.layout.comic_grid_view_display else R.layout.comic_list_view_display
         val view = LayoutInflater.from(parent.context).inflate(layoutId, parent, false)
         return ViewHolder(view)
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val item = comicList[position]
-        val file = DocumentFile.fromSingleUri(context, item.path.toUri())
+        holder.bind(item, listener)
 
-        if (file == null || !file.exists()) {
-            Log.w("ComicAdapter", "Skipping missing comic: ${item.path}")
-            return
-        }
+        // Cancel previous thumbnail job for this holder's image (if any)
+        val key = holder.ivComicRead.hashCode()
+        thumbnailJobs[key]?.cancel()
+        thumbnailJobs.remove(key)
 
-        // Popup menu
-        holder.ibtnComicMenu.setOnClickListener {
+        // Clear image
+        holder.ivComicRead.setImageDrawable(null)
+
+        // Start thumbnail job
+        val job = ThumbnailManager.loadThumbnailAsync(
+            context,
+            item.path.toUri(),
+            item.format,
+            holder.ivComicRead)
+
+        thumbnailJobs[key] = job
+
+        holder.ivComicMenu.setOnClickListener {
             showPopupMenu(holder, item)
         }
+    }
 
-        // Bind data + thumbnail
-        holder.bind(item, listener)
+    override fun onViewRecycled(holder: ViewHolder) {
+        super.onViewRecycled(holder)
+        val key = holder.ivComicRead.hashCode()
+        thumbnailJobs[key]?.cancel()
+        thumbnailJobs.remove(key)
+        holder.ivComicRead.setImageDrawable(null)
     }
 
     override fun getItemCount() = comicList.size
@@ -133,14 +95,22 @@ class ComicAdapter(
         notifyItemRangeInserted(start, newComics.size)
     }
 
-
-    inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        val ibtnComicRead: ImageButton = itemView.findViewById(R.id.ibtn_comic_read)
-        val ibtnComicMenu: ImageButton = itemView.findViewById(R.id.ibtn_comic_menu)
+    class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        val ivComicRead: ImageView = itemView.findViewById(R.id.iv_comic_read)
+        val ivComicMenu: ImageView = itemView.findViewById(R.id.iv_comic_menu)
         private val tvComicTitle: TextView = itemView.findViewById(R.id.tv_comic_title)
         private val tvComicDate: TextView = itemView.findViewById(R.id.tv_comic_date)
         private val tvComicSize: TextView = itemView.findViewById(R.id.tv_comic_size)
         private val tvComicFormat: TextView = itemView.findViewById(R.id.tv_comic_format)
+
+        init {
+            // HARD SAFETY — prevent theme tint/background from ever touching thumbnail
+            ivComicRead.apply {
+                background = null
+                imageTintList = null
+                setWillNotDraw(false)
+            }
+        }
 
         fun bind(item: Comic, listener: (Comic) -> Unit) {
             tvComicTitle.text = item.name
@@ -148,27 +118,23 @@ class ComicAdapter(
             tvComicSize.text = item.size
             tvComicFormat.text = item.format
 
-            ibtnComicRead.setImageDrawable(null)
-            ibtnComicRead.tag = item.path
-
-            when (item.format.lowercase()) {
-                "cbz" -> loadCbzThumbnailAsync(item.path, ibtnComicRead)
-                "cbr" -> loadCbrThumbnailAsync(item.path, ibtnComicRead)
-                "pdf" -> loadPdfThumbnailAsync(item.path, ibtnComicRead)
-            }
-
-            ibtnComicRead.setOnClickListener { listener(item) }
+            ivComicRead.setOnClickListener { listener(item) }
         }
     }
 
-    //Popup Menu
+    // Popup Menu
     private fun showPopupMenu(holder: ViewHolder, item: Comic) {
         val popupView = LayoutInflater.from(context).inflate(R.layout.custom_popup_menu, null)
-        val popupWindow = PopupWindow(popupView, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true).apply {
+        val popupWindow = PopupWindow(
+            popupView,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            true
+        ).apply {
             elevation = 10f
             isOutsideTouchable = true
             isFocusable = true
-            showAsDropDown(holder.ibtnComicMenu)
+            showAsDropDown(holder.ivComicMenu)
         }
 
         val tvComicRemove: TextView = popupView.findViewById(R.id.tv_Pop_Menu_Remove)
@@ -197,135 +163,34 @@ class ComicAdapter(
         }
     }
 
-    // Thumbnail helpers
-    private fun useCachedOrGenerate(filePath: String, imageView: ImageView, generateThumb: (File) -> Unit) {
-        val cacheKey = filePath
-        val cached = memoryCache[cacheKey]
-        if (cached != null && !cached.isRecycled) {
-            if (filePath == imageView.tag) imageView.setImageBitmap(cached)
-            return
-        }
+    companion object {
+        private const val VIEW_TYPE_GRID = 1
+        private const val VIEW_TYPE_LIST = 2
 
-        val thumbFile = File(context.cacheDir, "thumb_${cacheKey.hashCode()}.jpg")
-        if (thumbFile.exists()) {
-            CoroutineScope(sharedDispatcher).launch {
-                loadImageIntoView(imageView, cacheKey, Uri.fromFile(thumbFile))
-            }
-            return
-        }
-
-        CoroutineScope(sharedDispatcher).launch {
-            try {
-                generateThumb(thumbFile)
-                withContext(Dispatchers.Main) {
-                    if (filePath == imageView.tag) loadImageIntoView(imageView, cacheKey, Uri.fromFile(thumbFile))
+        // Helper: convert SAF/content URI to readable path
+        fun getReadablePath(context: Context, uri: Uri): String {
+            return try {
+                val docId = DocumentsContract.getDocumentId(uri)
+                val parts = docId.split(":")
+                if (parts.size == 2) {
+                    val volume = parts[0]
+                    val path = parts[1]
+                    if (volume == "primary") "/storage/emulated/0/$path"
+                    else "/storage/$volume/$path"
+                } else uri.toString()
+            } catch (_: Exception) {
+                try {
+                    val file = DocumentFile.fromSingleUri(context, uri)
+                    file?.name ?: uri.toString()
+                } catch (_: Exception) {
+                    uri.toString()
                 }
-            } catch (e: Exception) {
-                Log.e("ComicAdapter", "Thumbnail generation failed", e)
-            }
-        }
-    }
-
-    private fun loadCbzThumbnailAsync(filePath: String, imageView: ImageView) {
-        useCachedOrGenerate(filePath, imageView) { thumbFile ->
-            val context = imageView.context
-            var firstImageName: String? = null
-
-            context.contentResolver.openInputStream(filePath.toUri())?.use { input ->
-                ZipInputStream(input).use { zis ->
-                    generateSequence { zis.nextEntry }
-                        .filter { !it.isDirectory && it.name.matches(Regex("(?i).+\\.(jpg|jpeg|png|webp)$")) }
-                        .sortedBy { it.name }
-                        .firstOrNull()?.let { firstImageName = it.name }
-                }
-            }
-
-            if (firstImageName != null) {
-                context.contentResolver.openInputStream(filePath.toUri())?.use { input ->
-                    ZipInputStream(input).use { zis ->
-                        generateSequence { zis.nextEntry }
-                            .filter { it.name == firstImageName }
-                            .firstOrNull()?.let {
-                                val bytes = zis.readBytes()
-                                val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                bmp?.let {
-                                    val scaled = it.scale(400, (400f / it.width * it.height).toInt())
-                                    FileOutputStream(thumbFile).use { fos -> scaled.compress(Bitmap.CompressFormat.JPEG, 85, fos) }
-                                    it.recycle()
-                                    scaled.recycle()
-                                }
-                            }
-                    }
-                }
-            }
-        }
-    }
-
-    private fun loadCbrThumbnailAsync(filePath: String, imageView: ImageView) {
-        useCachedOrGenerate(filePath, imageView) { thumbFile ->
-            val context = imageView.context
-            val tempFile = File(context.cacheDir, "temp_${filePath.hashCode()}.cbr")
-            context.contentResolver.openInputStream(filePath.toUri())?.use { input ->
-                FileOutputStream(tempFile).use { output -> input.copyTo(output) }
-            }
-            val archive = Archive(tempFile)
-            val firstEntry = archive.fileHeaders
-                .filter { !it.isDirectory && it.fileName.matches(Regex("(?i).+\\.(jpg|jpeg|png|webp)$")) }
-                .minByOrNull { it.fileName }
-
-            firstEntry?.let { it ->
-                val tempImg = File(context.cacheDir, "cbr_img_${filePath.hashCode()}.jpg")
-                FileOutputStream(tempImg).use { fos -> archive.extractFile(it, fos) }
-                val bmp = BitmapFactory.decodeFile(tempImg.path)
-                bmp?.let {
-                    val scaled = it.scale(400, (400f / it.width * it.height).toInt())
-                    FileOutputStream(thumbFile).use { fos -> scaled.compress(Bitmap.CompressFormat.JPEG, 85, fos) }
-                    it.recycle()
-                    scaled.recycle()
-                }
-                tempImg.delete()
-            }
-            tempFile.delete()
-        }
-    }
-
-    private fun loadPdfThumbnailAsync(filePath: String, imageView: ImageView) {
-        useCachedOrGenerate(filePath, imageView) { thumbFile ->
-            context.contentResolver.openFileDescriptor(filePath.toUri(), "r")?.use { pfd ->
-                PdfRenderer(pfd).use { renderer ->
-                    renderer.openPage(0).use { page ->
-                        val targetWidth = 400
-                        val targetHeight = (400f / page.width * page.height).toInt()
-                        val bitmap = createBitmap(targetWidth, targetHeight)
-                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                        FileOutputStream(thumbFile).use { fos -> bitmap.compress(Bitmap.CompressFormat.JPEG, 85, fos) }
-                        bitmap.recycle()
-                    }
-                }
-            }
-        }
-    }
-
-    private fun loadImageIntoView(imageView: ImageView, cacheKey: String, uri: Uri) {
-        CoroutineScope(sharedDispatcher).launch {
-            try {
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    val bitmap = BitmapFactory.decodeStream(input)
-                    bitmap?.let {
-                        withContext(Dispatchers.Main) {
-                            if (cacheKey == imageView.tag) {
-                                memoryCache.put(cacheKey, it)
-                                imageView.setImageBitmap(it)
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("ComicAdapter", "Bitmap load failed", e)
             }
         }
     }
 }
+
+
 
 
 
