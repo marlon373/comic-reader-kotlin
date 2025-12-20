@@ -4,29 +4,25 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.core.graphics.createBitmap
 
-class PDFPageSource(
-    context: Context,
-    uri: Uri
-) : BitmapPageSource() {
+/**
+ * PDFPageSource - exposes PDF pages as Bitmaps
+ */
+class PDFPageSource(context: Context, uri: Uri) : BitmapPageSource() {
 
+    private val pfd: ParcelFileDescriptor
     private val renderer: PdfRenderer
 
     init {
-        renderer = try {
-            val fd = context.contentResolver.openFileDescriptor(uri, "r")
-                ?: throw IllegalArgumentException("Unable to open PDF Uri: $uri")
-            PdfRenderer(fd)
-        } catch (e: Exception) {
-            throw RuntimeException("Failed to open PDF Uri", e)
-        }
+        pfd = context.contentResolver.openFileDescriptor(uri, "r")
+            ?: throw IllegalArgumentException("Unable to open PDF Uri: $uri")
+        renderer = PdfRenderer(pfd)
     }
 
-    override fun getPageCount(): Int {
-        return renderer.pageCount
-    }
+    override fun getPageCount(): Int = renderer.pageCount
 
     @Synchronized
     override fun getPageBitmap(index: Int): Bitmap? {
@@ -41,10 +37,7 @@ class PDFPageSource(
                 }
 
                 val maxSize = 1280
-                val scale = minOf(
-                    maxSize.toFloat() / width,
-                    maxSize.toFloat() / height
-                )
+                val scale = minOf(maxSize.toFloat() / width, maxSize.toFloat() / height)
                 val scaledWidth = maxOf(1, (width * scale).toInt())
                 val scaledHeight = maxOf(1, (height * scale).toInt())
 
@@ -59,7 +52,9 @@ class PDFPageSource(
         }
     }
 
-    fun close() {
-        renderer.close()
+    override fun closeSource() {
+        super.closeSource()
+        try { renderer.close() } catch (_: Exception) {}
+        try { pfd.close() } catch (_: Exception) {}
     }
 }
