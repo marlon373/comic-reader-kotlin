@@ -30,7 +30,10 @@ import com.codecademy.comicreader.ui.library.LibraryViewModel
 import com.codecademy.comicreader.ui.recent.RecentViewModel
 import com.codecademy.comicreader.utils.SystemUtil
 import com.codecademy.comicreader.view.ComicViewer
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -50,7 +53,9 @@ class ComicFragment : Fragment() {
     private lateinit var libraryViewModel: LibraryViewModel
     private lateinit var recentViewModel: RecentViewModel
     private lateinit var comicAdapter: ComicAdapter
-    private val ioDispatcher by lazy { SystemUtil.createSmartDispatcher(requireContext()) }
+    private lateinit var appContext: Context
+    private lateinit var ioDispatcher: CoroutineDispatcher
+    private lateinit var ioScope: CoroutineScope
 
     companion object {
         private const val PREFS_NAME = "ComicPrefs"
@@ -65,13 +70,15 @@ class ComicFragment : Fragment() {
         binding = FragmentComicBinding.inflate(inflater, container, false)
         val root = binding!!.root
 
+        appContext = requireActivity().applicationContext
+        ioDispatcher = SystemUtil.createIODispatcher(appContext)
+        ioScope = CoroutineScope(ioDispatcher + SupervisorJob())
         loadPreferences()
-        setupRecyclerView()
 
-        comicAdapter = ComicAdapter(mutableListOf(), this::onComicClicked, isGridView, requireContext(), ioDispatcher)
+
+        comicAdapter = ComicAdapter(mutableListOf(), this::onComicClicked, isGridView, requireContext())
         binding?.rvComicDisplay?.adapter = comicAdapter
-
-        updateComicsView()
+        setupRecyclerView()
         loadSortPreferences()
 
         return root
@@ -192,7 +199,6 @@ class ComicFragment : Fragment() {
         }
     }
 
-
     // Display add folder first lunch
     private fun isFirstAppLaunch(): Boolean {
         val prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
@@ -228,24 +234,29 @@ class ComicFragment : Fragment() {
     // Toggle between grid and list
     fun toggleDisplayMode() {
         val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        var gridView = prefs.getBoolean(KEY_DISPLAY_MODE, true)
+        val current = prefs.getBoolean(KEY_DISPLAY_MODE, true)
+        val newGrid = !current
+        prefs.edit { putBoolean(KEY_DISPLAY_MODE, newGrid) }
 
-        gridView = !gridView
-        prefs.edit { putBoolean(KEY_DISPLAY_MODE, gridView) }
+        Log.d("ComicFragment", "toggleDisplayMode: Switched to ${if (newGrid) "Grid View" else "List View"}")
 
-        Log.d("ComicFragment", "toggleDisplayMode: Switched to ${if (gridView) "Grid View" else "List View"}")
+        // 1) Update LayoutManager only
+        val layoutManager = getLayoutManager(newGrid)
+        binding?.rvComicDisplay?.layoutManager = layoutManager
 
-        // Fully reset the RecyclerView layout
-        setupRecyclerView()
+        // 2) Inform adapter of mode change (adapter instance stays the same)
+        if (::comicAdapter.isInitialized) {
+            // update adapter state and rebind items
+            comicAdapter.isGridView = newGrid
+            // notify to re-create view holders according to new viewType
+            comicAdapter.notifyDataSetChanged()
+        } else {
+            // Fallback: create adapter if somehow not initialized (keeps single creation rule)
+            comicAdapter = ComicAdapter(comicFiles, this::onComicClicked, newGrid, requireContext())
+            binding?.rvComicDisplay?.adapter = comicAdapter
+        }
 
-        // Reload comics to reflect latest state
-        updateComicsView() // Ensure comics are updated when switching layouts
-
-        // Create a new adapter to force rebind with the correct layout
-        comicAdapter = ComicAdapter(comicFiles, this::onComicClicked, gridView, requireContext(), ioDispatcher)
-        binding?.rvComicDisplay?.adapter = comicAdapter
-
-        comicAdapter.notifyDataSetChanged()// Ensure UI refresh
+        // 3) Save any additional UI state if needed (already done via prefs)
     }
 
     // Updates RecyclerView LayoutManager
@@ -281,28 +292,28 @@ class ComicFragment : Fragment() {
 
     // Updates the comic list from Room database
     private fun updateComicsView() {
-        val context = context ?: run {
-            Log.w("ComicFragment", "Context is null, skipping updateComicsView")
-            return
-        }
+
         viewLifecycleOwner.lifecycleScope.launch(ioDispatcher) {
-            val db = ComicDatabase.getInstance(context)
+            val db = ComicDatabase.getInstance(appContext)
             val cachedComics = db.comicDao().getAllComics().first()
             val validComics = mutableListOf<Comic>()
 
-            val prefs = context.getSharedPreferences("removed_comics", Context.MODE_PRIVATE)
+            //  Use appContext here (safe)
+            val prefs = appContext.getSharedPreferences("removed_comics", Context.MODE_PRIVATE)
             val removedPaths = prefs.getStringSet("removed_paths", emptySet()) ?: emptySet()
 
             for (comic in cachedComics) {
                 if (removedPaths.contains(comic.path)) continue
 
-                val file = DocumentFile.fromSingleUri(context, comic.path.toUri())
+                // file access is safe with Fragment context here
+                val file = DocumentFile.fromSingleUri(appContext, comic.path.toUri())
                 if (file != null && file.exists()) {
                     validComics.add(comic)
                 } else {
                     db.comicDao().deleteComicByPath(comic.path)
                 }
             }
+
             withContext(Dispatchers.Main) {
                 if (!isAdded || activity == null) return@withContext
                 updateComicsList(validComics)
@@ -312,6 +323,7 @@ class ComicFragment : Fragment() {
 
     // Scanning or Rescanning
     private fun scanAndUpdateComics(fullRescan: Boolean = false) {
+
         binding?.apply {
             progressBar.visibility = View.VISIBLE
             tvScanningBanner.visibility = View.VISIBLE
@@ -364,7 +376,6 @@ class ComicFragment : Fragment() {
 
             if (newComics.isNotEmpty()) db.comicDao().insertAll(newComics)
 
-            //  Final snapshot after insert
             val finalList = db.comicDao().getAllComics().first()
             scanEditor.apply()
 
@@ -379,14 +390,8 @@ class ComicFragment : Fragment() {
         }
     }
 
-
     // Recursive scan helper
-    private suspend fun scanFolderRecursively(
-        directory: DocumentFile,
-        comics: MutableList<Comic>,
-        existingComicPaths: MutableSet<String>,
-        db: ComicDatabase
-    ) {
+    private suspend fun scanFolderRecursively(directory: DocumentFile, comics: MutableList<Comic>, existingComicPaths: MutableSet<String>, db: ComicDatabase) {
         val batch = mutableListOf<Comic>()
         for (file in directory.listFiles()) {
             if (file.isDirectory) {
@@ -430,16 +435,20 @@ class ComicFragment : Fragment() {
         }
 
         viewLifecycleOwner.lifecycleScope.launch(ioDispatcher) {
-            val context = context
-            if (context == null) {
+
+            // Always use application context on background thread
+            val prefs = appContext.getSharedPreferences("removed_comics", Context.MODE_PRIVATE)
+            val removedPaths = prefs.getStringSet("removed_paths", emptySet()) ?: emptySet()
+
+            val seenPaths = mutableSetOf<String>()
+            val validComics = mutableListOf<Comic>()
+
+            // Use Fragment context only for DocumentFile access
+            val ctx = context
+            if (ctx == null) {
                 Log.w("ComicFragment", "Context is null in background thread, skipping update.")
                 return@launch
             }
-
-            val prefs = context.getSharedPreferences("removed_comics", Context.MODE_PRIVATE)
-            val removedPaths = prefs.getStringSet("removed_paths", emptySet()) ?: emptySet()
-            val seenPaths = mutableSetOf<String>()
-            val validComics = mutableListOf<Comic>()
 
             for (comic in newComics) {
                 val path = comic.path
@@ -454,7 +463,7 @@ class ComicFragment : Fragment() {
                     continue
                 }
 
-                val file = DocumentFile.fromSingleUri(context, path.toUri())
+                val file = DocumentFile.fromSingleUri(ctx, path.toUri())
                 if (file != null && file.exists()) {
                     validComics.add(comic)
                 } else {
@@ -476,7 +485,6 @@ class ComicFragment : Fragment() {
             }
         }
     }
-
 
     // Detect manually remove file or folder
     private fun areAllFoldersInvalid(folders: List<Folder>?): Boolean {
@@ -573,7 +581,7 @@ class ComicFragment : Fragment() {
             Log.w("ComicFragment", "loadSortPreferences: comicFiles not ready. Skipping sort.")
             return
         }
-        val prefs = requireActivity().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val criteria = prefs.getString("sort_criteria", "name") ?: "name"
         val isAscending = prefs.getBoolean(KEY_SORT_MODE, true)
 
@@ -583,7 +591,7 @@ class ComicFragment : Fragment() {
     }
 
     private fun applySorting(criteria: String, isAscending: Boolean) {
-        val prefs = requireActivity().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit {
             putString("sort_criteria", criteria)
             putBoolean(KEY_SORT_MODE, isAscending)
